@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Following</title>
+
+<style>
+body{
+    background:#0b0018;
+    color:white;
+    font-family:Arial;
+    margin:0;
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 20px;
+    background:#12002b;
+    border-bottom:1px solid #2de2e6;
+}
+
+.top-btn{
+    background:#1f0045;
+    border:none;
+    color:white;
+    padding:8px 12px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.container{
+    max-width:600px;
+    margin:auto;
+    padding:20px;
+}
+
+.user-card{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:12px;
+    padding:10px;
+    margin-bottom:10px;
+    cursor:pointer;
+}
+
+.user-card:hover{
+    background:#1a0040;
+}
+
+.avatar{
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    object-fit:cover;
+    border:2px solid #2de2e6;
+}
+
+.name{
+    color:#7cf7ff;
+    font-size:15px;
+}
+
+.bio{
+    font-size:12px;
+    color:#aaa;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+    <button class="top-btn" onclick="history.back()">⬅ Back</button>
+    <div>➕ Following</div>
+    <button class="top-btn" onclick="location.href='/'">🏠</button>
+</div>
+
+<div class="container">
+
+{% if users %}
+{% for u in users %} <div class="user-card" onclick="openProfile('{{ u.id }}')"> <img src="/uploads/user_dp/{{ u.user_dp_pic }}" 
+              class="avatar"
+              onerror="this.src='/uploads/default_avatar.jpeg'">
+
+
+        <div>
+            <div class="name">{{ u.full_name }}</div>
+            <div class="bio">{{ u.bio }}</div>
+        </div>
+    </div>
+{% endfor %}
+
+
+{% else %} <p style="color:#777;text-align:center;">Not following anyone yet</p>
+{% endif %}
+function toggleComments(post_id){
+
+    let box = document.getElementById(`comments-${post_id}`);
+
+    if(box.style.display === "none"){
+        box.style.display = "block";
+        loadComments(post_id);
+    } else {
+        box.style.display = "none";
+    }
+}
+
+function loadComments(post_id){
+
+    fetch(`/comments/${post_id}`)
+    .then(r => r.json())
+    .then(data => {
+
+        let list = document.getElementById(`comments-list-${post_id}`);
+
+        list.innerHTML = "";
+
+        data.forEach(c => {
+
+            list.innerHTML += `
+                <div style="background:#1a0038;padding:8px;border-radius:8px;margin-top:6px;">
+                    <b>${escapeHTML(c.name)}</b><br>
+                    ${escapeHTML(c.comment)}
+                </div>
+            `;
+        });
+    });
+}
+
+function sendComment(post_id){
+
+    let input = document.getElementById(`comment-input-${post_id}`);
+
+    let text = input.value.trim();
+
+    if(!text){
+        return;
+    }
+
+    fetch("/add_comment", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            post_id: post_id,
+            comment: text
+        })
+    })
+    .then(r => r.json())
+    .then(d => {
+
+        if(d.error){
+            alert(d.error);
+            return;
+        }
+
+        input.value = "";
+
+        loadComments(post_id);
+        loadPosts();
+    });
+}
+</div>
+
+<script>
+function openProfile(id){
+    window.location.href = "/user/" + id;
+}
+</script>
+
+</body>
+</html>

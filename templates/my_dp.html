@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>My Profile</title>
+
+<style>
+body{
+    background:#0b0018;
+    color:white;
+    font-family:Arial;
+    margin:0;
+}
+
+/* HEADER */
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 20px;
+    background:#12002b;
+    border-bottom:1px solid #2de2e6;
+}
+
+.logo{ color:#7cf7ff; }
+
+.top-btn{
+    background:#1f0045;
+    border:none;
+    color:white;
+    padding:8px 12px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+/* CONTAINER */
+.container{
+    max-width:500px;
+    margin:auto;
+    padding:20px;
+}
+
+/* CARD */
+.card{
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:15px;
+    padding:20px;
+    text-align:center;
+}
+
+/* AVATAR */
+.avatar{
+    width:110px;
+    height:110px;
+    border-radius:50%;
+    border:2px solid #2de2e6;
+    object-fit:cover;
+    cursor:pointer;
+}
+
+/* NAME */
+.name{
+    margin-top:10px;
+    font-size:18px;
+    color:#7cf7ff;
+}
+
+/* STATS */
+.stats{
+    margin-top:8px;
+    font-size:13px;
+    color:#aaa;
+}
+
+.stat{
+    margin:0 10px;
+    cursor:pointer;
+}
+
+.stat:hover{
+    color:#2de2e6;
+}
+
+/* BIO */
+textarea{
+    width:100%;
+    margin-top:10px;
+    padding:10px;
+    border:1px solid #2de2e6;
+    background:#0f0025;
+    color:white;
+    border-radius:8px;
+}
+
+/* BUTTON */
+.btn{
+    margin-top:15px;
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+    color:white;
+    cursor:pointer;
+}
+
+/* POSTS */
+.posts{
+    margin-top:20px;
+}
+
+.post{
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:12px;
+    padding:12px;
+    margin-top:10px;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+    <button class="top-btn" onclick="location.href='/'">🏠 Feed</button>
+    <div class="logo">👤 My Profile</div>
+    <button class="top-btn" onclick="location.href='/logout'">Logout</button>
+</div>
+
+<div class="container">
+
+```
+<div class="card">
+
+    <!-- CLICKABLE AVATAR -->
+    <img id="avatarPreview"
+         src="/uploads/user_dp/{{ user.user_dp_pic }}"
+         class="avatar"
+         onclick="document.getElementById('fileInput').click()"
+         onerror="this.src='/uploads/default_avatar.jpeg'">
+
+    <!-- HIDDEN FILE INPUT -->
+    <input type="file" id="fileInput" style="display:none">
+
+    <!-- NAME (DISPLAY ONLY) -->
+    <div class="name">{{ user.full_name }}</div>
+
+    <!-- STATS -->
+    <div class="stats">
+        <span class="stat" onclick="viewFollowers()">
+            {{ followers_count }} BUDDIES
+        </span>
+        |
+        <span class="stat" onclick="viewFollowing()">
+            {{ following_count }} ADDED
+        </span>
+    </div>
+
+    <!-- BIO -->
+    <textarea id="bioInput" rows="3">{{ user.bio }}</textarea>
+
+    <button class="btn" onclick="saveProfile()">Save Changes</button>
+
+</div>
+
+<!-- POSTS -->
+<div class="posts">
+    <h3 style="color:#7cf7ff;">My Posts</h3>
+    <div id="my_posts"></div>
+</div>
+```
+
+</div>
+
+<script>
+
+let user_id = "{{ user.id }}";
+
+/* NAVIGATION */
+function viewFollowers(){
+    window.location.href = "/followers/" + user_id;
+}
+
+function viewFollowing(){
+    window.location.href = "/following/" + user_id;
+}
+
+/* LIVE AVATAR PREVIEW */
+let selectedFile = null;
+
+document.getElementById("fileInput").addEventListener("change", function(e){
+    selectedFile = e.target.files[0];
+
+    if(selectedFile){
+        let reader = new FileReader();
+        reader.onload = function(e){
+            document.getElementById("avatarPreview").src = e.target.result;
+        }
+        reader.readAsDataURL(selectedFile);
+    }
+});
+
+/* SAVE PROFILE (NO RELOAD) */
+function saveProfile(){
+
+    let formData = new FormData();
+
+    formData.append("bio", document.getElementById("bioInput").value);
+
+    if(selectedFile){
+        formData.append("user_dp_pic", selectedFile);
+    }
+
+    fetch("/dp", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.text())
+    .then(() => {
+        alert("Profile updated");
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Update failed");
+    });
+}
+
+/* LOAD POSTS (NO RELOAD) */
+function loadPosts(){
+
+    fetch(`/posts/${user_id}`)
+    .then(res => res.json())
+    .then(data => {
+
+        let container = document.getElementById("my_posts");
+        container.innerHTML = "";
+
+        if(!data || data.length === 0){
+            container.innerHTML = "<p style='color:#777'>No posts yet</p>";
+            return;
+        }
+
+        data.forEach(p => {
+
+            let media = "";
+
+            if(p.media){
+                if(p.type === "image"){
+                    media = `<img src="${p.media}" style="width:100%;border-radius:10px;">`;
+                } else if(p.type === "video"){
+                    media = `<video src="${p.media}" controls style="width:100%"></video>`;
+                }
+            }
+
+            container.innerHTML += `
+                <div class="post">
+                    <p>${p.content || ""}</p>
+                    ${media}
+                </div>
+            `;
+        });
+
+    });
+}
+
+loadPosts();
+
+</script>
+
+</body>
+</html>

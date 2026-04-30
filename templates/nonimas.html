@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Nonimas</title>
+
+<style>
+body{
+    background:#0b0018;
+    color:white;
+    font-family:Arial;
+    margin:0;
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 20px;
+    background:#12002b;
+    border-bottom:1px solid #2de2e6;
+}
+
+.logo{color:#7cf7ff;font-size:20px}
+
+.top-btn{
+    background:#1f0045;
+    border:none;
+    color:white;
+    padding:8px 12px;
+    border-radius:8px;
+    margin-left:10px;
+    cursor:pointer;
+}
+
+.main{display:flex}
+.sidebar{width:25%;padding:20px}
+.feed-container{width:50%;padding:20px}
+
+textarea{
+    width:100%;
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:10px;
+    color:white;
+    padding:10px;
+    margin-bottom:10px;
+}
+
+.btn{
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+    color:white;
+    cursor:pointer;
+}
+
+.post{
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:12px;
+    padding:15px;
+    margin-top:15px;
+}
+
+.actions{
+    display:flex;
+    gap:10px;
+    margin-top:10px;
+    flex-wrap:wrap;
+}
+
+.small-btn{
+    flex:1;
+    background:#1f0045;
+    border:none;
+    color:white;
+    padding:8px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.section-box{
+    background:#140030;
+    padding:12px;
+    border-radius:10px;
+    margin-top:10px;
+    border:1px solid #2de2e6;
+}
+
+.comment-box{
+    margin-top:10px;
+    background:#0f0020;
+    padding:10px;
+    border-radius:10px;
+}
+
+.comment-input{
+    width:100%;
+    padding:8px;
+    border-radius:8px;
+    border:1px solid #2de2e6;
+    background:#140030;
+    color:white;
+    margin-top:5px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+    <button class="top-btn" onclick="location.href='/dp'">👤 Profile</button>
+    <div class="logo">Nonimas</div>
+    <div>
+        <button class="top-btn" onclick="location.href='/chat_page'">💬 Chats</button>
+        <button class="top-btn" onclick="location.href='/buddies_page'">👥 Buddies</button>
+    </div>
+</div>
+
+<div class="main">
+
+<!-- WALLET -->
+<div class="sidebar">
+
+    <h3 style="color:#7cf7ff;">Wallet</h3>
+    <div class="section-box" id="balance">Loading...</div>
+
+    <h4 style="color:#7cf7ff;">Your Gifts</h4>
+    <div id="owned-gifts"></div>
+
+</div>
+
+<!-- FEED -->
+<div class="feed-container">
+
+    <textarea id="content" placeholder="Post anonymously..."></textarea>
+    <input type="file" id="file">
+    <button class="btn" onclick="createPost()">Post</button>
+
+    <div id="feed"></div>
+
+</div>
+
+</div>
+
+<script>
+
+let user_id = {{ session.get('user_id', 0) | tojson }};
+
+/* WALLET */
+function loadWallet(){
+    fetch(`/wallet/${user_id}`)
+    .then(r=>r.json())
+    .then(d=>{
+        document.getElementById("balance").innerHTML =
+        `<b>Balance:</b> $${d.balance}`;
+    });
+}
+
+/* GIFTS */
+function loadOwnedGifts(){
+    fetch("/my_gifts")
+    .then(r=>r.json())
+    .then(data=>{
+        let box = document.getElementById("owned-gifts");
+        box.innerHTML = "";
+
+        if(data.length === 0){
+            box.innerHTML = "<p>No gifts yet</p>";
+            return;
+        }
+
+        data.forEach(g=>{
+            box.innerHTML += `
+                <div class="section-box">
+                    🎁 <b>${g.name}</b><br>
+                    Qty: ${g.quantity}
+                </div>
+            `;
+        });
+    });
+}
+
+/* CREATE POST */
+function createPost(){
+    let fd = new FormData();
+    fd.append("content", document.getElementById("content").value);
+
+    let file = document.getElementById("file");
+    if(file.files.length>0){
+        fd.append("file", file.files[0]);
+    }
+
+    fetch("/create_post",{method:"POST", body:fd})
+    .then(()=>loadPosts());
+}
+
+/* LIKE POST */
+function likePost(postId){
+    fetch("/like_post",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({post_id:postId})
+    })
+    .then(r=>r.json())
+    .then(()=>{
+        loadPosts();
+    });
+}
+
+/* LOAD COMMENTS */
+function loadComments(postId){
+
+    let box = document.getElementById(`comments-${postId}`);
+
+    fetch(`/comments/${postId}`)
+    .then(r=>r.json())
+    .then(data=>{
+
+        box.innerHTML = "";
+
+        data.forEach(c=>{
+            box.innerHTML += `
+                <div class="section-box">
+                    <b>${c.name}</b><br>
+                    ${c.comment}
+                </div>
+            `;
+        });
+
+        box.innerHTML += `
+            <input class="comment-input" id="input-${postId}" placeholder="Write comment...">
+            <button class="small-btn" onclick="addComment(${postId})">Send</button>
+        `;
+    });
+}
+
+/* ADD COMMENT */
+function addComment(postId){
+
+    let text = document.getElementById(`input-${postId}`).value;
+
+    fetch("/add_comment",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            post_id:postId,
+            comment:text
+        })
+    })
+    .then(r=>r.json())
+    .then(()=>{
+        loadComments(postId);
+        loadPosts();
+    });
+}
+
+/* POSTS */
+function loadPosts(){
+    fetch("/posts")
+    .then(r=>r.json())
+    .then(data=>{
+        let feed = document.getElementById("feed");
+        feed.innerHTML = "";
+
+        data.forEach(p=>{
+
+            let media = "";
+            if(p.media){
+                media = `<img src="${p.media}" style="width:100%;margin-top:10px;border-radius:10px;">`;
+            }
+
+            feed.innerHTML += `
+            <div class="post">
+                <p>${p.content}</p>
+                ${media}
+
+                <div class="actions">
+
+                    <button class="small-btn" onclick="likePost(${p.id})">
+                        ❤️ ${p.likes}
+                    </button>
+
+                    <button class="small-btn" onclick="loadComments(${p.id})">
+                        💬 ${p.comments}
+                    </button>
+
+                    <button class="small-btn" onclick="toggleGiftBox(${p.id},${p.user})">
+                        🎁 Gift
+                    </button>
+
+                </div>
+
+                <div id="gift-box-${p.id}" style="display:none;margin-top:10px;"></div>
+
+                <div id="comments-${p.id}" class="comment-box"></div>
+            </div>`;
+        });
+    });
+}
+
+/* GIFT BOX */
+function toggleGiftBox(postId, receiverId){
+
+    let box = document.getElementById(`gift-box-${postId}`);
+
+    if(box.style.display==="block"){
+        box.style.display="none";
+        return;
+    }
+
+    box.style.display="block";
+    box.innerHTML="Loading...";
+
+    fetch("/gifts")
+    .then(r=>r.json())
+    .then(gifts=>{
+        box.innerHTML="";
+
+        gifts.forEach(g=>{
+            box.innerHTML += `
+                <div class="section-box">
+                    <b>${g.name}</b>
+                    <button class="small-btn" onclick="sendGift(${postId},${receiverId},${g.id})">
+                        Send
+                    </button>
+                </div>
+            `;
+        });
+    });
+}
+
+/* SEND GIFT */
+function sendGift(postId, receiverId, giftId){
+
+    fetch("/check_gift_access",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({gift_id:giftId})
+    })
+    .then(r => r.json())
+    .then(res => {
+
+        // ❌ NOT ALLOWED → REDIRECT TO BUY PAGE
+        if(!res.allowed){
+            alert("You don't have gifts. Redirecting to shop...");
+
+            window.location.href = res.redirect || "/buy_gift_page";
+            return;
+        }
+
+        // ✅ SEND GIFT
+        return fetch("/send_gift",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+                post_id:postId,
+                gift_id:giftId,
+                quantity:1
+            })
+        });
+
+    })
+    .then(r => {
+        if (!r) return; // stop if redirected earlier
+        return r.json();
+    })
+    .then(data => {
+
+        if (!data) return;
+
+        // ⚠️ SERVER REDIRECT (important fix)
+        if (data.redirect){
+            window.location.href = data.redirect;
+            return;
+        }
+
+        if (data.error){
+            alert(data.error);
+            return;
+        }
+
+        // ✅ success
+        loadWallet();
+        loadOwnedGifts();
+
+    })
+    .catch(err => {
+        console.error("Gift error:", err);
+    });
+}
+
+/* INITIAL LOAD */
+loadPosts();
+loadWallet();
+loadOwnedGifts();
+</script>
+</body>
+</html>

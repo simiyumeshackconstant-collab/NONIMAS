@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chat</title>
+
+<style>
+body{
+    background:#0b0018;
+    color:white;
+    font-family:Arial;
+    margin:0;
+}
+
+.header{
+    padding:15px;
+    background:#12002b;
+    border-bottom:1px solid #2de2e6;
+    text-align:center;
+    color:#7cf7ff;
+}
+
+.active-user{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px;
+    border-bottom:1px solid #2de2e6;
+    color:#aaa;
+}
+
+.active-user img{
+    width:35px;
+    height:35px;
+    border-radius:50%;
+    border:2px solid #2de2e6;
+}
+
+.buddies{
+    display:flex;
+    overflow-x:auto;
+    gap:12px;
+    padding:10px;
+    border-bottom:1px solid #2de2e6;
+}
+
+.buddy{
+    text-align:center;
+    cursor:pointer;
+}
+
+.buddy img{
+    width:60px;
+    height:60px;
+    border-radius:50%;
+    border:2px solid #2de2e6;
+}
+
+.chat-box{
+    padding:15px;
+    height:50vh;
+    overflow-y:auto;
+}
+
+/* messages */
+.msg{
+    max-width:70%;
+    padding:10px;
+    margin-bottom:10px;
+    border-radius:12px;
+}
+
+.me{
+    background:#2de2e6;
+    color:black;
+    margin-left:auto;
+}
+
+.them{
+    background:#140030;
+    border:1px solid #2de2e6;
+}
+
+/* input */
+.input{
+    display:flex;
+    padding:10px;
+    gap:8px;
+}
+
+input{
+    flex:1;
+    padding:10px;
+    border-radius:10px;
+    border:1px solid #2de2e6;
+    background:#140030;
+    color:white;
+}
+
+input:disabled{
+    opacity:0.5;
+}
+
+button{
+    padding:10px;
+    border:none;
+    border-radius:10px;
+    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+    color:white;
+    cursor:pointer;
+}
+
+button:disabled{
+    opacity:0.5;
+    cursor:not-allowed;
+}
+
+.clear{
+    width:100%;
+    background:#1f0045;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="header">💬 Chat</div>
+
+<div class="active-user" id="activeUser">
+    ⚠️ Select a user to start chatting
+</div>
+
+<div class="buddies" id="buddies"></div>
+
+<div class="chat-box" id="chat"></div>
+
+<div class="input">
+    <input id="msg" placeholder="Select a user first..." disabled>
+    <button id="sendBtn" onclick="send()" disabled>Send</button>
+</div>
+
+<button class="clear" onclick="clearChat()">Done for now</button>
+
+<script>
+
+let myId = "{{ session.get('user_id') }}";
+let currentUser = null;
+
+/* URL USER */
+const urlParams = new URLSearchParams(window.location.search);
+let preSelectedUser = urlParams.get("user");
+
+/* ENABLE INPUT */
+function enableInput(){
+    document.getElementById("msg").disabled = false;
+    document.getElementById("sendBtn").disabled = false;
+    document.getElementById("msg").placeholder = "Type message...";
+}
+
+/* LOAD BUDDIES */
+function loadBuddies(){
+    fetch("/mutual_buddies")
+    .then(res=>res.json())
+    .then(data=>{
+        let bar = document.getElementById("buddies");
+        bar.innerHTML="";
+
+        data.users.forEach(u=>{
+            bar.innerHTML += `
+                <div class="buddy" onclick="selectUser(${u.id}, '${u.name}', '${u.dp}')">
+                    <img src="/uploads/user_dp/${u.dp}" onerror="this.src='/uploads/default_avatar.jpeg'">
+                    <div style="font-size:11px">${u.name}</div>
+                </div>
+            `;
+        });
+    });
+}
+
+/* SELECT USER */
+function selectUser(id, name, dp){
+    currentUser = id;
+
+    enableInput();
+
+    document.getElementById("activeUser").innerHTML = `
+        <img src="/uploads/user_dp/${dp}" onerror="this.src='/uploads/default_avatar.jpeg'">
+        <div>${name}</div>
+    `;
+
+    loadChat();
+}
+
+/* LOAD CHAT */
+function loadChat(){
+    if(!currentUser) return;
+
+    fetch(`/get_messages/${myId}/${currentUser}`)
+    .then(res=>res.json())
+    .then(data=>{
+        let chat = document.getElementById("chat");
+        chat.innerHTML="";
+
+        data.forEach(m=>{
+            let cls = m.sender == myId ? "msg me" : "msg them";
+
+            chat.innerHTML += `<div class="${cls}">${m.message}</div>`;
+        });
+
+        chat.scrollTop = chat.scrollHeight;
+    });
+}
+
+/* SEND MESSAGE */
+function send(){
+    let message = document.getElementById("msg").value;
+
+    if(!currentUser){
+        alert("Select a user first");
+        return;
+    }
+
+    if(!message.trim()){
+        return;
+    }
+
+    fetch("/send_message",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            receiver_id: currentUser,
+            message: message
+        })
+    }).then(()=>{
+        document.getElementById("msg").value="";
+        loadChat();
+    });
+}
+
+/* CLEAR CHAT */
+function clearChat(){
+    if(!currentUser){
+        alert("No chat selected");
+        return;
+    }
+
+    fetch("/clear_chat",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            user1: myId,
+            user2: currentUser
+        })
+    }).then(()=>{
+        document.getElementById("chat").innerHTML="";
+    });
+}
+
+/* AUTO SELECT FROM PROFILE */
+function loadPreSelectedUser(){
+    if(!preSelectedUser) return;
+
+    fetch(`/user_info/${preSelectedUser}`)
+    .then(res=>res.json())
+    .then(u=>{
+        selectUser(u.id, u.name, u.dp);
+    });
+}
+
+/* AUTO REFRESH */
+setInterval(()=>{
+    if(currentUser){
+        loadChat();
+    }
+}, 2000);
+
+/* INIT */
+loadBuddies();
+loadPreSelectedUser();
+
+</script>
+
+</body>
+</html>

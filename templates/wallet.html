@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wallet</title>
+
+<style>
+body{
+    background:#0b0018;
+    color:white;
+    font-family:Arial;
+    margin:0;
+}
+
+/* HEADER */
+.header{
+    padding:15px 20px;
+    background:#12002b;
+    border-bottom:1px solid #2de2e6;
+    text-align:center;
+    color:#7cf7ff;
+}
+
+/* CARD */
+.card{
+    margin:20px;
+    padding:25px;
+    background:#140030;
+    border-radius:15px;
+    border:1px solid #2de2e6;
+    text-align:center;
+}
+
+.balance{
+    font-size:32px;
+    color:#7cf7ff;
+    margin:10px 0;
+}
+
+/* BUTTON */
+button{
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+    color:white;
+    width:100%;
+    margin-top:10px;
+    cursor:pointer;
+}
+
+/* SMALL */
+.small{
+    background:#1f0045;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">💰 Wallet</div>
+
+<div class="card">
+    <h3>Your Balance</h3>
+    <div class="balance" id="balance">0</div>
+
+    <button onclick="deposit()">Deposit</button>
+    <button onclick="withdraw()">Withdraw</button>
+    <button class="small" onclick="refresh()">Refresh</button>
+</div>
+
+<script>
+const API = "http://127.0.0.1:5000"
+let user_id = 1
+
+function loadWallet(){
+    fetch(`${API}/wallet/${user_id}`)
+    .then(res=>res.json())
+    .then(data=>{
+        document.getElementById("balance").innerText = data.balance
+    })
+}
+
+function deposit(){
+    alert("Connect MPESA / payment here")
+}
+
+function withdraw(){
+    alert("Withdrawal system next step")
+}
+
+function refresh(){
+    loadWallet()
+}
+
+loadWallet()
+</script>
+
+</body>
+</html>

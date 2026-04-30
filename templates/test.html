@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Nonimas</title>
+
+<style>
+body{
+    background:#0b0018;
+    color:white;
+    font-family:Arial;
+    margin:0;
+}
+
+/* HEADER */
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 20px;
+    background:#12002b;
+    border-bottom:1px solid #2de2e6;
+}
+
+.logo{color:#7cf7ff;font-size:20px}
+
+.top-btn{
+    background:#1f0045;
+    border:none;
+    color:white;
+    padding:8px 12px;
+    border-radius:8px;
+    margin-left:10px;
+    cursor:pointer;
+}
+
+/* LAYOUT */
+.main{display:flex}
+.sidebar{width:25%;padding:20px}
+.feed-container{width:50%;padding:20px}
+
+/* INPUT */
+textarea{
+    width:100%;
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:10px;
+    color:white;
+    padding:10px;
+    margin-bottom:10px;
+}
+
+.btn{
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+    color:white;
+    cursor:pointer;
+}
+
+/* POST */
+.post{
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:12px;
+    padding:15px;
+    margin-top:15px;
+}
+
+.actions{display:flex;gap:10px;margin-top:10px}
+
+.small-btn{
+    flex:1;
+    background:#1f0045;
+    border:none;
+    color:white;
+    padding:8px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+/* WALLET BOX */
+.section-box{
+    background:#140030;
+    padding:12px;
+    border-radius:10px;
+    margin-top:10px;
+    border:1px solid #2de2e6;
+}
+</style>
+</head>
+
+<body>
+
+<!-- HEADER -->
+<div class="header">
+    <div>
+        <button class="top-btn" onclick="location.href='/dp'">👤 Profile</button>
+    </div>
+
+    <div class="logo">Nonimas</div>
+
+    <div>
+        <button class="top-btn" onclick="location.href='/buddies_page'">👥 Buddies</button>
+    </div>
+</div>
+
+<div class="main">
+
+<!-- LEFT: WALLET (SIMPLIFIED) -->
+<div class="sidebar">
+
+    <h3 style="color:#7cf7ff;">Wallet</h3>
+
+    <!-- BALANCE ONLY -->
+    <div class="section-box" id="balance">Loading balance...</div>
+
+    <!-- AVAILABLE GIFTS ONLY -->
+    <h4 style="margin-top:15px;color:#7cf7ff;">Available Gifts</h4>
+    <div id="gifts"></div>
+
+</div>
+
+<!-- FEED -->
+<div class="feed-container">
+
+    <textarea id="content" placeholder="Post anonymously..."></textarea>
+    <input type="file" id="file">
+    <button class="btn" onclick="createPost()">Post</button>
+
+    <div id="feed"></div>
+
+</div>
+
+<div class="sidebar"></div>
+
+</div>
+
+<script>
+
+let user_id = {{ session.get('user_id', 0) | tojson }};
+
+/* ESCAPE */
+function escapeHTML(str){
+    if(!str) return "";
+    return str.replace(/[&<>"']/g, m => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",
+        "\"":"&quot;","'":"&#039;"
+    })[m]);
+}
+
+/* WALLET BALANCE */
+function loadWallet(){
+    fetch(`/wallet/${user_id}`)
+    .then(r=>r.json())
+    .then(d=>{
+        document.getElementById("balance").innerHTML =
+            `<b>Balance:</b> $${d.balance}`;
+    });
+}
+
+/* GIFTS ONLY */
+function loadGifts(){
+    fetch("/gifts")
+    .then(r=>r.json())
+    .then(data=>{
+        let box = document.getElementById("gifts");
+        box.innerHTML = "";
+
+        data.forEach(g=>{
+            box.innerHTML += `
+                <div class="section-box">
+                    🎁 <b>${g.name}</b><br>
+                    Price: $${g.price}
+                </div>
+            `;
+        });
+    });
+}
+
+/* CREATE POST */
+function createPost(){
+
+    let fd = new FormData();
+    fd.append("content", document.getElementById("content").value);
+
+    let file = document.getElementById("file");
+    if(file.files.length > 0){
+        fd.append("file", file.files[0]);
+    }
+
+    fetch("/create_post",{method:"POST", body:fd})
+    .then(()=> {
+        document.getElementById("content").value = "";
+        document.getElementById("file").value = "";
+        loadPosts();
+    });
+}
+
+/* LOAD POSTS */
+function loadPosts(){
+    fetch("/posts")
+    .then(r=>r.json())
+    .then(data=>{
+        let feed = document.getElementById("feed");
+        feed.innerHTML = "";
+
+        data.forEach(p=>{
+
+            let media = "";
+            if(p.media){
+                media = `<img src="${p.media}" style="width:100%;border-radius:10px;margin-top:10px;">`;
+            }
+
+            feed.innerHTML += `
+            <div class="post">
+                <p>${escapeHTML(p.content)}</p>
+                ${media}
+
+                <div class="actions">
+                    <button class="small-btn" onclick="toggleLike(${p.id}, this)">
+                        ❤️ <span>${p.likes}</span>
+                    </button>
+
+                    <button class="small-btn" onclick="toggleComments(${p.id})">
+                        💬 <span id="comment-count-${p.id}">${p.comments}</span>
+                    </button>
+                </div>
+
+                <div id="comments-${p.id}" style="display:none;margin-top:10px;">
+                    <div id="comment-list-${p.id}"></div>
+
+                    <input id="comment-input-${p.id}" placeholder="Write comment..."
+                        style="width:100%;margin-top:5px;padding:8px;border-radius:8px;border:none;background:#1f0045;color:white;">
+
+                    <button class="small-btn" onclick="addComment(${p.id})">Send</button>
+                </div>
+            </div>`;
+        });
+    });
+}
+
+/* COMMENTS */
+function toggleComments(id){
+    let box = document.getElementById(`comments-${id}`);
+    box.style.display = box.style.display === "none" ? "block" : "none";
+    loadComments(id);
+}
+
+function loadComments(id){
+    fetch(`/comments/${id}`)
+    .then(r=>r.json())
+    .then(data=>{
+        let list = document.getElementById(`comment-list-${id}`);
+        list.innerHTML = "";
+
+        data.forEach(c=>{
+            list.innerHTML += `
+                <div class="section-box">
+                    <b>${escapeHTML(c.name)}</b><br>
+                    ${escapeHTML(c.comment)}
+                </div>
+            `;
+        });
+    });
+}
+
+function addComment(id){
+    let input = document.getElementById(`comment-input-${id}`);
+
+    fetch("/add_comment",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            post_id:id,
+            comment:input.value
+        })
+    })
+    .then(r=>r.json())
+    .then(d=>{
+        input.value="";
+        document.getElementById(`comment-count-${id}`).textContent = d.count;
+        loadComments(id);
+    });
+}
+
+/* LIKE */
+function toggleLike(id, btn){
+    fetch("/like_post",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({post_id:id})
+    })
+    .then(r=>r.json())
+    .then(d=>{
+        btn.innerHTML = `❤️ <span>${d.count}</span>`;
+    });
+}
+
+/* INIT */
+if(user_id){
+    loadWallet();
+    loadPosts();
+    loadGifts();
+}
+
+</script>
+
+</body>
+</html>

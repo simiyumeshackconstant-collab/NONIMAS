@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body{background:#0b0018;color:white;font-family:Arial;margin:0}
+.header{padding:15px;background:#12002b;border-bottom:1px solid #2de2e6;text-align:center;color:#7cf7ff}
+.container{padding:20px}
+input{width:100%;padding:10px;margin-bottom:10px;background:#140030;border:1px solid #2de2e6;color:white;border-radius:10px}
+.btn{width:100%;padding:8px;border:none;border-radius:10px;background:linear-gradient(45deg,#2de2e6,#7b2ff7);color:rgb(17, 207, 26)}
+.card{background:#140030;padding:10px;border-radius:10px;margin-top:10px}
+</style>
+</head>
+<body>
+
+<div class="header">👥 Buddies</div>
+
+<div class="container">
+        <h3 id="followers_count">0 BUDDIES</h3>
+
+        <h3 id="following_count">0 ADDED</h3>
+<button class="btn" onclick="window.location.href='/my_buddies'">My Buddies</button>
+
+<input id="buddy_id" placeholder="Enter Buddy name or ID">
+<button class="btn" onclick="addBuddy()">Add Buddy</button>
+        <div id="users_list"></div>
+
+</div>
+
+<script>
+function loadAll(){
+
+    const users_list = document.getElementById("users_list")
+    const following_count = document.getElementById("following_count")
+    const followers_count = document.getElementById("followers_count")
+
+    // 🔹 USERS TO ADD
+    fetch("/users_to_add")
+    .then(r=>r.json())
+    .then(data=>{
+        users_list.innerHTML=""
+
+        data.users.forEach(u=>{
+            users_list.innerHTML+=`
+                <div class="card"style="display:flex;align-items:center;justify-content:space-between;">
+                    
+               <div class="display:flex;align-items:center;gap:10px;">
+                    <div class="card" onclick="openProfile(${u.id})"><img src="/uploads/user_dp/${u.dp}" 
+                        style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #2de2e6;margin-right:10px;">
+                    
+                    <div style="font-weight:bold;">${u.name}</div>
+                    <div style="font-size:12px;color:#aaa;">${u.bio}</div>
+                    </div>       
+                    
+                </div>
+
+                    <button class="btn" style="width:auto;padding:6px 12px;" onclick="addBuddy(${u.id})">
+                        Add
+                    </button>
+
+                </div>
+
+            `
+        })
+    })
+
+    // 🔹 FOLLOWING
+    fetch("/following")
+    .then(r=>r.json())
+    .then(data=>{
+        following_count.innerText = data.count + " Added"
+    })
+
+    // 🔹 FOLLOWERS
+    fetch("/followers")
+    .then(r=>r.json())
+    .then(data=>{
+        followers_count.innerText = data.count + " Buddies"
+    })
+}
+
+function addBuddy(id){
+    fetch("/add_buddy",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({buddy_id:id})
+    }).then(()=>loadAll())
+}
+
+loadAll()
+</script>
+</body>
+</html>

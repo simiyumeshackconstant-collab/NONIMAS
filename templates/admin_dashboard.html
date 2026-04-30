@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+
+    <style>
+        body{
+            background:#0b0018;
+            color:white;
+            font-family:Arial;
+            padding:20px;
+        }
+
+        .card{
+            background:#140030;
+            padding:15px;
+            border-radius:10px;
+            margin-bottom:10px;
+            border:1px solid #2de2e6;
+        }
+
+        .grid{
+            display:grid;
+            grid-template-columns:repeat(3,1fr);
+            gap:10px;
+        }
+
+        h2{color:#7cf7ff}
+    </style>
+</head>
+
+<body>
+
+<h2>📊 Admin Revenue Dashboard</h2>
+
+<div class="grid">
+
+    <div class="card">
+        <h3>💰 Revenue</h3>
+        <p>${{ revenue }}</p>
+    </div>
+
+    <div class="card">
+        <h3>💸 Payouts</h3>
+        <p>${{ payouts }}</p>
+    </div>
+
+    <div class="card">
+        <h3>📈 Profit</h3>
+        <p>${{ profit }}</p>
+    </div>
+
+</div>
+
+<div class="card">
+    <h3>🎁 Most Popular Gifts</h3>
+
+    {% for g in popular_gifts %}
+        <p>{{ g[0] }} — {{ g[1] }} sent</p>
+    {% endfor %}
+</div>
+<div>
+    <div class="card">
+        <h3>👑 Top Creators</h3>
+        {% for c in top_creators %}
+            <p>{{ c[0] }} — ${{ c[1] }} earned</p>
+        {% endfor %}
+        
+</div>
+<div>
+    <div class="card">
+        <button><a href="/">home</a></button>
+
+        {% for c in top_creators %}
+            <p>{{ c[0] }} — ${{ c[1] }} earned</p>
+        {% endfor %}
+    </div>
+</div>
+</body>
+</html>

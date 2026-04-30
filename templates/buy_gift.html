@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Buy Gifts</title>
+<style>
+body{
+    margin:0;
+    font-family:Arial;
+    background:#0b0018;
+    color:white;
+}
+.header{
+    background:#12002b;
+    padding:15px;
+    text-align:center;
+    color:#7cf7ff;
+    font-size:22px;
+    border-bottom:1px solid #2de2e6;
+}
+.wrap{
+    width:700px;
+    margin:30px auto;
+}
+.gift{
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:12px;
+    padding:15px;
+    margin-bottom:15px;
+}
+button{
+    width:100%;
+    margin-top:10px;
+    padding:10px;
+    border:none;
+    border-radius:10px;
+    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+    color:white;
+    cursor:pointer;
+}
+</style>
+</head>
+<body>
+
+<div class="header">Buy Gifts</div>
+
+<div class="wrap" id="giftBox"></div>
+
+<script>
+let user_id = {{ session["user_id"]|tojson }};
+
+fetch("/gifts")
+.then(r=>r.json())
+.then(gifts=>{
+    let box=document.getElementById("giftBox");
+
+    gifts.forEach(g=>{
+        box.innerHTML += `
+        <div class="gift">
+            <h3>${g.name}</h3>
+            <p>Price: $${g.price}</p>
+            <button onclick="buyGift(${g.id})">Buy</button>
+        </div>`;
+    });
+});
+
+function buyGift(giftId){
+
+    fetch(`/wallet/${user_id}`)
+    .then(r=>r.json())
+    .then(w=>{
+
+        fetch("/gifts")
+        .then(r=>r.json())
+        .then(gifts=>{
+
+            let gift = gifts.find(x=>x.id===giftId);
+
+            if(w.balance < gift.price){
+                window.location.href="/deposit";
+                return;
+            }
+
+            fetch("/buy_gift",{
+                method:"POST",
+                headers:{
+                    "Content-Type":"application/json"
+                },
+                body:JSON.stringify({
+                    gift_id:giftId,
+                    quantity:1
+                })
+            })
+            .then(()=>location.reload());
+
+        });
+
+    });
+}
+</script>
+
+</body>
+</html>

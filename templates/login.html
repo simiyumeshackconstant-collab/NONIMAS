@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ APP_NAME }} | Login</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+/* --- GENERAL --- */
+body {
+    background: #0b0018; /* dark space theme */
+    color: white;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+/* --- HOME BUTTON FIXED TOP --- */
+.btn-home-top {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 999;
+    color: white;
+    text-decoration: none;
+    background: linear-gradient(45deg, #2de2e6, #7b2ff7);
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: opacity 0.3s, box-shadow 0.3s;
+}
+.btn-home-top:hover {
+    opacity: 0.85;
+    box-shadow: 0 0 12px #2de2e6, 0 0 18px #7b2ff7;
+}
+
+/* --- CONTAINER --- */
+.container {
+    max-width: 400px;
+    margin: 100px auto 60px auto;
+    padding: 30px;
+    background: #140030; /* same as homepage feature boxes */
+    border: 1px solid #2de2e6; /* neon cyan border */
+    border-radius: 12px;
+    box-shadow: 0 0 20px rgba(45, 226, 230, 0.3);
+}
+
+/* --- HEADINGS --- */
+h2 {
+    color: #7cf7ff; /* light cyan heading */
+    text-align: center;
+    margin-bottom: 20px;
+}
+h5 {
+    color: #d4d4ff; /* lavender subheading */
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+/* --- LABELS --- */
+label {
+    color: #6df3d6;
+}
+
+/* --- INPUT FIELDS --- */
+.form-control {
+    background: #103338; /* dark purple input */
+    color: white;
+    border: 1px solid #2de2e6; /* cyan border */
+    border-radius: 8px;
+    padding: 10px;
+}
+.form-control:focus {
+    background: #b998e7;
+    border-color: #f0ecf5; /* purple glow */
+    outline: none;
+    box-shadow: 0 0 8px #2de2e6, 0 0 12px #7b2ff7;
+}
+
+/* --- BUTTONS --- */
+.btn-login {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: linear-gradient(45deg, #2de2e6, #7b2ff7);
+    transition: opacity 0.3s;
+}
+.btn-login:hover {
+    opacity: 0.85;
+}
+
+/* --- LINK BUTTONS --- */
+.btn-link {
+    display: inline-block;
+    margin-top: 10px;
+    color: white;
+    text-decoration: none;
+    background: linear-gradient(45deg, #2de2e6, #7b2ff7);
+    padding: 10px 20px;
+    border-radius: 8px;
+    transition: opacity 0.3s;
+}
+.btn-link:hover {
+    opacity: 0.85;
+}
+
+/* --- ALERT MESSAGES --- */
+.alert {
+    background: #140030;
+    color: #d4d4ff;
+    border: 1px solid #2de2e6;
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin-bottom: 20px;
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 600px) {
+    .container {
+        margin: 80px 15px 40px 15px;
+        padding: 20px;
+    }
+
+    h2 {
+        font-size: 22px;
+    }
+
+    .form-control {
+        font-size: 14px;
+        padding: 8px;
+    }
+
+    .btn-login, .btn-link {
+        font-size: 14px;
+        padding: 10px;
+    }
+}
+
+/* --- FOOTER --- */
+footer {
+    text-align: center;
+    padding: 20px;
+    background: #12002b;
+    margin-top: 40px;
+    border-top: 1px solid #2de2e6;
+    color: #d4d4ff;
+}
+</style>
+</head>
+<body>
+
+<!-- Home Button Always on Top -->
+<!-- Logo at the top center -->
+<img src="{{ url_for('static', filename='space_lio_logo.jpeg') }}" 
+     alt="{{ APP_NAME }} Logo" 
+     class="logo" 
+     style="display:block; margin:20px auto; width:120px; border-radius:50%;">
+<a href="{{ url_for('nonimas') }}" class="btn-home-top">Home</a>
+
+<div class="container">
+    <h2>Login to {{ APP_NAME }}</h2>
+    <h5>Use your phone number or email to login</h5>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert">
+          {{ messages[0] }}
+        </div>
+      {% endif %}
+    {% endwith %}
+<form method="POST">
+    <div class="mb-3">
+        <label for="identifier">Phone Number or Email</label> <br>
+        <input type="text" class="form-control" id="identifier" name="identifier" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="password">Password</label> <br>
+        <input type="password" class="form-control" id="password" name="password" required>
+    </div>
+
+    <br>
+
+    <button type="submit" class="btn-login">Login</button>
+    <a href="{{ url_for('register') }}" class="btn-link">Create account</a>
+</form>
+</div>
+
+<footer>
+    © 2026 {{ APP_NAME }} | All Rights Reserved
+</footer>
+
+</body>
+</html>
