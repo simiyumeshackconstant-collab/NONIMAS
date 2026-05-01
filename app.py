@@ -788,28 +788,11 @@ def my_buddies():
 @app.route("/deposit", methods=["GET", "POST"])
 @login_required
 def deposit():
-    user_id = session["user_id"]
-
-    wallet = Wallet.query.filter_by(user_id=user_id).first()
-    if not wallet:
-        wallet = Wallet(user_id=user_id, balance=0)
-        db.session.add(wallet)
-        db.session.commit()
-
     if request.method == "POST":
-        amount = float(request.form.get("amount", 0))
+        flash("Deposit feature coming soon.")
+        return redirect(url_for("deposit"))
 
-        if amount <= 0:
-            flash("Invalid amount")
-            return redirect(url_for("deposit"))
-
-        wallet.balance += amount
-        db.session.commit()
-
-        flash(f"${amount} deposited successfully")
-        return redirect(url_for("nonimas"))
-
-    return render_template("deposit.html", wallet=wallet)
+    return render_template("deposit.html")
 
 
 @app.route("/buy_gift_page")
