@@ -1543,9 +1543,10 @@ def handle_join(data):
     join_room(str(user_id))
 # ---------------- RUN ----------------
 
+
 if __name__ == "__main__":
-
     with app.app_context():
+        seed_gifts()
 
-       seed_gifts()
-       socketio.run(app, debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    socketio.run(app, host="0.0.0.0", port=port, debug=True)
