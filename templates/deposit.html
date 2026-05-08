@@ -3,66 +3,142 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Deposit</title>
-<style>
-body{
-    margin:0;
-    font-family:Arial;
-    background:#0b0018;
-    color:white;
-}
-.box{
-    width:400px;
-    margin:80px auto;
-    background:#140030;
-    border:1px solid #2de2e6;
-    padding:30px;
-    border-radius:15px;
-}
-h2{
-    text-align:center;
-    color:#7cf7ff;
-}
-input{
-    width:100%;
-    padding:12px;
-    margin-top:15px;
-    border:none;
-    border-radius:10px;
-    background:#1f0045;
-    color:white;
-    box-sizing:border-box;
-}
-button{
-    width:100%;
-    margin-top:15px;
-    padding:12px;
-    border:none;
-    border-radius:10px;
-    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
-    color:white;
-    cursor:pointer;
-}
-.balance{
-    text-align:center;
-    margin:20px 0;
-    font-size:20px;
-}
-</style>
+    <title>Deposit</title>
+
+    <style>
+
+        body{
+            margin:0;
+            font-family:Arial, sans-serif;
+            background:#0b0018;
+            color:white;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            min-height:100vh;
+            padding:20px;
+            box-sizing:border-box;
+        }
+
+        .box{
+            width:100%;
+            max-width:420px;
+            background:#140030;
+            border:1px solid #2de2e6;
+            padding:30px;
+            border-radius:20px;
+            box-shadow:0 0 25px rgba(45,226,230,0.15);
+        }
+
+        h2{
+            text-align:center;
+            color:#7cf7ff;
+            margin-top:0;
+            margin-bottom:25px;
+        }
+
+        .balance{
+            text-align:center;
+            margin-bottom:25px;
+            font-size:20px;
+            background:#1b003d;
+            padding:15px;
+            border-radius:12px;
+        }
+
+        .balance b{
+            color:#7cf7ff;
+        }
+
+        input{
+            width:100%;
+            padding:14px;
+            border:none;
+            border-radius:12px;
+            background:#1f0045;
+            color:white;
+            box-sizing:border-box;
+            margin-bottom:15px;
+            font-size:15px;
+        }
+
+        input::placeholder{
+            color:#aaa;
+        }
+
+        button{
+            width:100%;
+            padding:14px;
+            border:none;
+            border-radius:12px;
+            background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+            color:white;
+            font-size:16px;
+            font-weight:bold;
+            cursor:not-allowed;
+            opacity:0.8;
+        }
+
+        .notice{
+            margin-top:20px;
+            background:#220044;
+            border:1px solid #ffcc00;
+            color:#ffdd66;
+            padding:15px;
+            border-radius:12px;
+            text-align:center;
+            font-size:14px;
+            line-height:1.5;
+        }
+
+        .back-btn{
+            margin-top:15px;
+            width:100%;
+            padding:12px;
+            border:none;
+            border-radius:12px;
+            background:#1f0045;
+            color:white;
+            cursor:pointer;
+            font-size:15px;
+        }
+
+    </style>
 </head>
+
 <body>
 
 <div class="box">
+
     <h2>Deposit Funds</h2>
 
     <div class="balance">
         Balance: <b>${{ wallet.balance }}</b>
     </div>
 
-    <form method="POST">
-        <input type="number" step="0.01" name="amount" placeholder="Enter amount" required>
-        <button type="submit">Deposit</button>
-    </form>
+    <!-- DISPLAY ONLY -->
+    <input 
+        type="number"
+        placeholder="Enter amount"
+        disabled
+    >
+
+    <button disabled>
+        Deposit Not Available
+    </button>
+
+    <div class="notice">
+        Deposits are currently unavailable.<br>
+        This feature will be enabled soon.
+    </div>
+
+    <button 
+        class="back-btn"
+        onclick="location.href='/wallet_page'"
+    >
+        ← Back To Wallet
+    </button>
+
 </div>
 
 </body>

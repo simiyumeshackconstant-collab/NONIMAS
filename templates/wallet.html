@@ -1,102 +1,293 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallet</title>
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wallet</title>
+    <style>
+        body{
+            margin:0;
+            font-family:Arial, sans-serif;
+            background:#0b0018;
+            color:white;
+        }
 
-<style>
-body{
-    background:#0b0018;
-    color:white;
-    font-family:Arial;
-    margin:0;
-}
+        .header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:15px 20px;
+            background:#12002b;
+            border-bottom:1px solid #2de2e6;
+            position:sticky;
+            top:0;
+            z-index:100;
+        }
 
-/* HEADER */
-.header{
-    padding:15px 20px;
-    background:#12002b;
-    border-bottom:1px solid #2de2e6;
-    text-align:center;
-    color:#7cf7ff;
-}
+        .title{
+            font-size:22px;
+            color:#7cf7ff;
+            font-weight:bold;
+        }
 
-/* CARD */
-.card{
-    margin:20px;
-    padding:25px;
-    background:#140030;
-    border-radius:15px;
-    border:1px solid #2de2e6;
-    text-align:center;
-}
+        .back-btn{
+            background:#1f0045;
+            border:none;
+            color:white;
+            padding:10px 14px;
+            border-radius:10px;
+            cursor:pointer;
+        }
 
-.balance{
-    font-size:32px;
-    color:#7cf7ff;
-    margin:10px 0;
-}
+        .container{
+            max-width:700px;
+            margin:auto;
+            padding:20px;
+        }
 
-/* BUTTON */
-button{
-    padding:12px;
-    border:none;
-    border-radius:10px;
-    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
-    color:white;
-    width:100%;
-    margin-top:10px;
-    cursor:pointer;
-}
+        .wallet-card{
+            background:linear-gradient(135deg,#1a0038,#24004f);
+            border:1px solid #2de2e6;
+            border-radius:20px;
+            padding:25px;
+            margin-bottom:20px;
+            box-shadow:0 0 20px rgba(45,226,230,0.15);
+        }
 
-/* SMALL */
-.small{
-    background:#1f0045;
-}
-</style>
+        .wallet-label{
+            font-size:14px;
+            color:#aaa;
+            margin-bottom:8px;
+        }
+
+        .wallet-balance{
+            font-size:42px;
+            font-weight:bold;
+            color:#7cf7ff;
+        }
+
+        .wallet-actions{
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:15px;
+            margin-top:20px;
+        }
+
+        .action-btn{
+            padding:14px;
+            border:none;
+            border-radius:12px;
+            cursor:pointer;
+            font-size:15px;
+            font-weight:bold;
+            color:white;
+            background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+        }
+
+        .section{
+            background:#140030;
+            border:1px solid #2de2e6;
+            border-radius:16px;
+            padding:18px;
+            margin-bottom:20px;
+        }
+
+        .section h3{
+            margin-top:0;
+            color:#7cf7ff;
+        }
+
+        .transaction{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:12px 0;
+            border-bottom:1px solid rgba(255,255,255,0.08);
+        }
+
+        .transaction:last-child{
+            border-bottom:none;
+        }
+
+        .tx-name{
+            font-weight:bold;
+        }
+
+        .tx-date{
+            font-size:12px;
+            color:#aaa;
+            margin-top:4px;
+        }
+
+        .tx-amount{
+            font-weight:bold;
+            color:#7cf7ff;
+        }
+
+        .empty{
+            text-align:center;
+            color:#999;
+            padding:20px 0;
+        }
+
+        @media(max-width:600px){
+            .wallet-actions{
+                grid-template-columns:1fr;
+            }
+
+            .wallet-balance{
+                font-size:34px;
+            }
+        }
+    </style>
 </head>
 
 <body>
 
-<div class="header">💰 Wallet</div>
+<div class="header">
+    <button class="back-btn" onclick="location.href='/'">← Back</button>
+    <div class="title">My Wallet</div>
+</div>
 
-<div class="card">
-    <h3>Your Balance</h3>
-    <div class="balance" id="balance">0</div>
+<div class="container">
 
-    <button onclick="deposit()">Deposit</button>
-    <button onclick="withdraw()">Withdraw</button>
-    <button class="small" onclick="refresh()">Refresh</button>
+    <div class="wallet-card">
+        <div class="wallet-label">Available Balance</div>
+        <div class="wallet-balance" id="balance">$0.00</div>
+
+        <div class="wallet-actions">
+            <button class="action-btn" onclick="location.href='/deposit'">
+                Deposit
+            </button>
+
+            <button class="action-btn" onclick="withdrawFunds()">
+                Withdraw
+            </button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>Recent Earnings</h3>
+
+        <div id="earnings-list">
+            <div class="empty">Loading earnings...</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>Gift Inventory</h3>
+
+        <div id="gift-list">
+            <div class="empty">Loading gifts...</div>
+        </div>
+    </div>
+
 </div>
 
 <script>
-const API = "http://127.0.0.1:5000"
-let user_id = 1
+
+const USER_ID = {{ session['user_id']|tojson }};
 
 function loadWallet(){
-    fetch(`${API}/wallet/${user_id}`)
-    .then(res=>res.json())
-    .then(data=>{
-        document.getElementById("balance").innerText = data.balance
+
+    fetch(`/wallet/${USER_ID}`)
+    .then(r => r.json())
+    .then(data => {
+
+        document.getElementById("balance").innerText =
+            `$${Number(data.balance).toFixed(2)}`;
     })
+    .catch(err => {
+        console.error(err);
+    });
 }
 
-function deposit(){
-    alert("Connect MPESA / payment here")
+function loadGifts(){
+
+    fetch('/my_gifts')
+    .then(r => r.json())
+    .then(data => {
+
+        let box = document.getElementById('gift-list');
+
+        if(data.length === 0){
+            box.innerHTML = `
+                <div class="empty">
+                    No gifts owned yet.
+                </div>
+            `;
+            return;
+        }
+
+        box.innerHTML = "";
+
+        data.forEach(g => {
+
+            box.innerHTML += `
+                <div class="transaction">
+                    <div>
+                        <div class="tx-name">🎁 ${g.name}</div>
+                    </div>
+
+                    <div class="tx-amount">
+                        x${g.quantity}
+                    </div>
+                </div>
+            `;
+        });
+    });
 }
 
-function withdraw(){
-    alert("Withdrawal system next step")
+function loadEarnings(){
+
+    fetch('/earnings')
+    .then(r => r.json())
+    .then(data => {
+
+        let box = document.getElementById('earnings-list');
+
+        if(data.length === 0){
+            box.innerHTML = `
+                <div class="empty">
+                    No earnings yet.
+                </div>
+            `;
+            return;
+        }
+
+        box.innerHTML = "";
+
+        data.forEach(e => {
+
+            box.innerHTML += `
+                <div class="transaction">
+
+                    <div>
+                        <div class="tx-name">Content Earnings</div>
+                        <div class="tx-date">${e.date}</div>
+                    </div>
+
+                    <div class="tx-amount">
+                        +$${Number(e.amount).toFixed(4)}
+                    </div>
+
+                </div>
+            `;
+        });
+    })
+    .catch(err => {
+        console.error(err);
+    });
 }
 
-function refresh(){
-    loadWallet()
+function withdrawFunds(){
+    alert("Withdrawal system coming soon.");
 }
 
-loadWallet()
+loadWallet();
+loadGifts();
+loadEarnings();
+
 </script>
 
 </body>

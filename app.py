@@ -40,8 +40,12 @@ app = Flask(__name__)
 # THEN initialize socketio AFTER app exists
 from flask_socketio import SocketIO
 
-socketio = SocketIO(app, cors_allowed_origins="*")
-
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading"  # SAFE for local + Render
+)
+from flask_socketio import SocketIO, join_room, leave_room, emit
 
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
 
@@ -1417,6 +1421,28 @@ def wallet(user_id):
 
 
     return jsonify({"balance": wallet.balance})
+@app.route("/wallet_page")
+@login_required
+def wallet_page():
+    return render_template("wallet.html")
+
+@app.route("/earnings")
+@login_required
+def earnings():
+
+    user_id = session["user_id"]
+
+    rows = Earning.query.filter_by(user_id=user_id)\
+        .order_by(Earning.created_at.desc())\
+        .limit(20).all()
+
+    return jsonify([
+        {
+            "amount": e.amount,
+            "date": e.created_at.strftime("%Y-%m-%d %H:%M")
+        }
+        for e in rows
+    ])
 
 
 # -------- CHAT --------
@@ -1532,4 +1558,4 @@ if __name__ == "__main__":
         seed_gifts()
 
     port = int(os.environ.get("PORT", 10000))
-    socketio.run(app, host="0.0.0.0", port=port, debug=True)
+    socketio.run(app, host="0.0.0.0", port=port, debug=True, use_reloader=False)

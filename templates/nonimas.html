@@ -34,10 +34,24 @@ body{
     cursor:pointer;
 }
 
-.main{display:flex}
-.sidebar{width:25%;padding:20px}
-.feed-container{width:50%;padding:20px}
+.main{
+    display:flex;
+    width:100%;
+}
 
+/* Sidebar (left like Facebook) */
+.sidebar{
+    width:280px;
+    padding:15px;
+}
+
+/* Feed should TAKE ALL REMAINING SPACE */
+.feed-container{
+    flex:1;
+    padding:15px;
+    max-width:800px;   /* keeps it readable like Facebook */
+    margin:0 auto;     /* center ONLY when screen is huge */
+}
 textarea{
     width:100%;
     background:#140030;
@@ -61,27 +75,31 @@ textarea{
 .post{
     background:#140030;
     border:1px solid #2de2e6;
-    border-radius:12px;
-    padding:15px;
-    margin-top:15px;
+    border-radius:14px;
+    padding:18px;
+    margin:15px 0;
+    width:100%;
+    box-sizing:border-box;
 }
-
 .actions{
     display:flex;
+    justify-content:space-between;
+    margin-top:12px;
     gap:10px;
-    margin-top:10px;
-    flex-wrap:wrap;
 }
+
 
 .small-btn{
     flex:1;
     background:#1f0045;
     border:none;
     color:white;
-    padding:8px;
-    border-radius:8px;
+    padding:10px;
+    border-radius:10px;
     cursor:pointer;
+    font-size:14px;
 }
+
 
 .section-box{
     background:#140030;
@@ -113,26 +131,17 @@ textarea{
 <body>
 
 <div class="header">
-    <button class="top-btn" onclick="location.href='/dp'">👤 Profile</button>
-    <div class="logo">Nonimas</div>
-    <div>
-        <button class="top-btn" onclick="location.href='/chat_page'">💬 Chats</button>
-        <button class="top-btn" onclick="location.href='/buddies_page'">👥 Buddies</button>
-    </div>
+    <button class="top-btn" onclick="location.href='/dp'">👤</button>
+     <button class="top-btn" onclick="location.href='/wallet_page'">
+    💰
+     </button>
+     <button class="top-btn" onclick="location.href='/nonimas_page'">NONIMAS</button>
+        <button class="top-btn" onclick="location.href='/chat_page'">💬</button>
+        <button class="top-btn" onclick="location.href='/buddies_page'">👤👤</button>
 </div>
 
 <div class="main">
 
-<!-- WALLET -->
-<div class="sidebar">
-
-    <h3 style="color:#7cf7ff;">Wallet</h3>
-    <div class="section-box" id="balance">Loading...</div>
-
-    <h4 style="color:#7cf7ff;">Your Gifts</h4>
-    <div id="owned-gifts"></div>
-
-</div>
 
 <!-- FEED -->
 <div class="feed-container">
@@ -150,40 +159,6 @@ textarea{
 <script>
 
 let user_id = {{ session.get('user_id', 0) | tojson }};
-
-/* WALLET */
-function loadWallet(){
-    fetch(`/wallet/${user_id}`)
-    .then(r=>r.json())
-    .then(d=>{
-        document.getElementById("balance").innerHTML =
-        `<b>Balance:</b> $${d.balance}`;
-    });
-}
-
-/* GIFTS */
-function loadOwnedGifts(){
-    fetch("/my_gifts")
-    .then(r=>r.json())
-    .then(data=>{
-        let box = document.getElementById("owned-gifts");
-        box.innerHTML = "";
-
-        if(data.length === 0){
-            box.innerHTML = "<p>No gifts yet</p>";
-            return;
-        }
-
-        data.forEach(g=>{
-            box.innerHTML += `
-                <div class="section-box">
-                    🎁 <b>${g.name}</b><br>
-                    Qty: ${g.quantity}
-                </div>
-            `;
-        });
-    });
-}
 
 /* CREATE POST */
 function createPost(){
@@ -270,10 +245,40 @@ function loadPosts(){
         data.forEach(p=>{
 
             let media = "";
+
             if(p.media){
-                media = `<img src="${p.media}" style="width:100%;margin-top:10px;border-radius:10px;">`;
+                if(p.type === "image"){
+                    media = `
+                    <img src="${p.media}" style="
+                        width:100%;
+                        max-height:500px;
+                        object-fit:cover;
+                        border-radius:10px;
+                        margin-top:10px;
+               ">`;
             }
 
+            else if(p.type === "video"){
+               media = `
+               <video controls style="
+                    width:100%;
+                    border-radius:10px;
+                    margin-top:10px;
+                ">
+                    <source src="${p.media}">
+                </video>`;
+            }
+
+            else{
+                media = `
+                <a href="${p.media}" target="_blank">
+                    Download File
+                </a>`;
+            }
+        }
+
+           
+                   
             feed.innerHTML += `
             <div class="post">
                 <p>${p.content}</p>
@@ -396,8 +401,6 @@ function sendGift(postId, receiverId, giftId){
 
 /* INITIAL LOAD */
 loadPosts();
-loadWallet();
-loadOwnedGifts();
 </script>
 </body>
 </html>
