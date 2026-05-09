@@ -788,17 +788,36 @@ def my_buddies():
 
     return render_template("my_buddies.html", buddies=result)
 
-# -------- DEPOSIT --------
 @app.route("/deposit", methods=["GET", "POST"])
 @login_required
 def deposit():
+
+    user_id = session["user_id"]
+
+    wallet = Wallet.query.filter_by(user_id=user_id).first()
+
+    # create wallet if missing
+    if not wallet:
+
+        wallet = Wallet(
+            user_id=user_id,
+            balance=0
+        )
+
+        db.session.add(wallet)
+        db.session.commit()
+
+    # disable deposits for now
     if request.method == "POST":
-        flash("Deposit feature coming soon.")
+
+        flash("Deposits are currently unavailable.")
+
         return redirect(url_for("deposit"))
 
-    return render_template("deposit.html")
-
-
+    return render_template(
+        "deposit.html",
+        wallet=wallet
+    )
 @app.route("/buy_gift_page")
 @login_required
 def buy_gift_page():
@@ -893,6 +912,17 @@ def buy_gift():
         "new_balance": wallet.balance
     })
 
+@app.route("/gift_count/<int:post_id>")
+def gift_count(post_id):
+
+    total = db.session.query(
+        db.func.sum(GiftTransaction.quantity)
+    ).filter_by(post_id=post_id).scalar()
+
+    return jsonify({
+        "count": total or 0
+    })
+    
 @app.route("/send_gift", methods=["POST"])
 @login_required
 def send_gift():
