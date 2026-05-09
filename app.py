@@ -1584,8 +1584,14 @@ def handle_join(data):
 
 
 if __name__ == "__main__":
+
     with app.app_context():
         seed_gifts()
 
     port = int(os.environ.get("PORT", 10000))
-    socketio.run(app, host="0.0.0.0", port=port, debug=True, use_reloader=False)
+
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        port=port
+    )
