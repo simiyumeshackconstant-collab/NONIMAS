@@ -71,12 +71,6 @@ textarea{
     color:white;
     cursor:pointer;
 }
-/* 🎁 GIFT COUNT HELPER */
-async function getGiftCount(postId){
-    let res = await fetch(`/gift_count/${postId}`);
-    let data = await res.json();
-    return data.count;
-}
 
 .post{
     background:#140030;
@@ -141,7 +135,7 @@ async function getGiftCount(postId){
      <button class="top-btn" onclick="location.href='/wallet_page'">
     💰
      </button>
-     <button class="top-btn" onclick="location.href='/nonimas_page'">NONIMAS</button>
+     <button class="top-btn" onclick="location.href='/'">NONIMAS</button>
         <button class="top-btn" onclick="location.href='/chat_page'">💬</button>
         <button class="top-btn" onclick="location.href='/buddies_page'">👤👤</button>
 </div>
@@ -167,19 +161,109 @@ async function getGiftCount(postId){
 let user_id = {{ session.get('user_id', 0) | tojson }};
 
 /* CREATE POST */
-function createPost(){
-    let fd = new FormData();
-    fd.append("content", document.getElementById("content").value);
+async function createPost(){
 
-    let file = document.getElementById("file");
-    if(file.files.length>0){
-        fd.append("file", file.files[0]);
+    let contentInput = document.getElementById("content");
+    let fileInput = document.getElementById("file");
+
+    let content = contentInput.value.trim();
+
+    if(!content && fileInput.files.length === 0){
+        return;
     }
 
-    fetch("/create_post",{method:"POST", body:fd})
-    .then(()=>loadPosts());
-}
+    let fd = new FormData();
 
+    fd.append("content", content);
+
+    if(fileInput.files.length > 0){
+        fd.append("file", fileInput.files[0]);
+    }
+
+    try{
+
+        // 🚀 instant loading UI
+        const tempId = "temp-" + Date.now();
+
+        let previewMedia = "";
+
+        if(fileInput.files.length > 0){
+
+            const file = fileInput.files[0];
+
+            const localURL = URL.createObjectURL(file);
+
+            if(file.type.startsWith("image/")){
+
+                previewMedia = `<img src="${localURL}">`;
+            }
+
+            else if(file.type.startsWith("video/")){
+
+                previewMedia = `
+                <video controls>
+                    <source src="${localURL}">
+                </video>`;
+            }
+        }
+
+        // 🚀 show instantly before upload finishes
+        const feed = document.getElementById("feed");
+
+        feed.innerHTML = `
+        <div class="post" id="${tempId}" style="opacity:0.7">
+
+            <p>${content}</p>
+
+            ${previewMedia}
+
+            <div class="actions">
+
+                <button class="small-btn">❤️ 0</button>
+
+                <button class="small-btn">💬 0</button>
+
+                <button class="small-btn">🎁 0</button>
+
+            </div>
+
+            <div style="margin-top:10px;color:#7cf7ff;">
+                Posting...
+            </div>
+
+        </div>
+        ` + feed.innerHTML;
+
+        // ✅ upload
+        let res = await fetch("/create_post",{
+            method:"POST",
+            body:fd
+        });
+
+        let data = await res.json();
+
+        if(data.success){
+
+            // clear form FAST
+            contentInput.value = "";
+            fileInput.value = "";
+
+            // remove temporary post
+            const tempPost = document.getElementById(tempId);
+
+            if(tempPost){
+                tempPost.remove();
+            }
+
+            // load real updated posts
+            loadPosts();
+        }
+
+    }catch(err){
+
+        console.error(err);
+    }
+}
 /* LIKE POST */
 function likePost(postId){
     fetch("/like_post",{
@@ -188,8 +272,12 @@ function likePost(postId){
         body:JSON.stringify({post_id:postId})
     })
     .then(r=>r.json())
-    .then(()=>{
-        loadPosts();
+    .then(data=>{
+        const btn = document.querySelector(`#like-btn-${postId}`);
+
+        if(btn){
+            btn.innerHTML = `❤️ ${data.count}`;
+        }
     });
 }
 
@@ -234,12 +322,23 @@ function addComment(postId){
         })
     })
     .then(r=>r.json())
-    .then(()=>{
+    .then(data=>{
+
+        const btn = document.querySelector(`#comment-btn-${postId}`);
+
+        if(btn){
+            btn.innerHTML = `💬 ${data.count}`;
+        }
+
         loadComments(postId);
-        loadPosts();
     });
 }
-
+/* 🎁 GIFT COUNT HELPER */
+async function getGiftCount(postId){
+    let res = await fetch(`/gift_count/${postId}`);
+    let data = await res.json();
+    return data.count;
+}
 /* POSTS */
 async function loadPosts(){
 
@@ -295,15 +394,23 @@ async function loadPosts(){
 
             <div class="actions">
 
-                <button class="small-btn" onclick="likePost(${p.id})">
+                <button
+                    id="like-btn-${p.id}"
+                    class="small-btn"
+                    onclick="likePost(${p.id})">
                     ❤️ ${p.likes}
                 </button>
 
-                <button class="small-btn" onclick="loadComments(${p.id})">
+                <button id="comment-btn-${p.id}"
+                    class="small-btn"
+                    onclick="loadComments(${p.id})">
                     💬 ${p.comments}
                 </button>
 
-                <button class="small-btn" onclick="toggleGiftBox(${p.id},${p.user})">
+                <button id="gift-btn-${p.id}"
+                    data-count="${giftCount}"
+                    class="small-btn"
+                    onclick="toggleGiftBox(${p.id},${p.user})">
                     🎁 ${giftCount}
                 </button>
 
@@ -398,9 +505,20 @@ function sendGift(postId, receiverId, giftId){
         }
 
         // ✅ success
-        loadWallet();
-        loadOwnedGifts();
+        const giftBtn = document.querySelector(`#gift-btn-${postId}`);
 
+        if(giftBtn){
+
+            let current = parseInt(
+                giftBtn.dataset.count || "0"
+            );
+
+            current++;
+
+            giftBtn.dataset.count = current;
+
+            giftBtn.innerHTML = `🎁 ${current}`;
+    }
     })
     .catch(err => {
         console.error("Gift error:", err);

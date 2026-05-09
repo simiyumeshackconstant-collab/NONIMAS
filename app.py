@@ -191,6 +191,9 @@ class Like(db.Model):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    is_active = db.Column(db.Boolean, default=True)
+
+    rewarded = db.Column(db.Boolean, default=False)
 class Post(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
@@ -415,48 +418,70 @@ def nonimas():
 def like_post():
 
     data = request.json
+
     user_id = session["user_id"]
     post_id = int(data["post_id"])
 
     post = Post.query.get(post_id)
+
     if not post:
         return jsonify({"error": "Post not found"})
 
-    existing = Like.query.filter_by(
+    like = Like.query.filter_by(
         user_id=user_id,
         post_id=post_id
     ).first()
 
-    # ❌ UNLIKE (remove earning logic)
-    if existing:
-        db.session.delete(existing)
-        db.session.commit()
+    # FIRST TIME EVER
+    if not like:
 
-        count = Like.query.filter_by(post_id=post_id).count()
+        like = Like(
+            user_id=user_id,
+            post_id=post_id,
+            is_active=True,
+            rewarded=True
+        )
 
-        return jsonify({
-            "liked": False,
-            "count": count
-        })
+        db.session.add(like)
 
-    # ✅ LIKE (ADD EARNING)
-    like = Like(user_id=user_id, post_id=post_id)
-    db.session.add(like)
+        # 💰 reward ONLY ONCE
+        earning = Earning(
+            user_id=post.user_id,
+            amount=LIKE_EARN
+        )
 
-    # 💰 creator earns
-    earning = Earning(
-        user_id=post.user_id,
-        amount=LIKE_EARN
-    )
-    db.session.add(earning)
-     # 💳 ADD TO WALLET (NEW)
-    add_to_wallet(post.user_id, LIKE_EARN)
+        db.session.add(earning)
+
+        add_to_wallet(post.user_id, LIKE_EARN)
+
+    else:
+
+        # toggle active state
+        like.is_active = not like.is_active
+
+        # reward ONLY FIRST TIME
+        if like.is_active and not like.rewarded:
+
+            earning = Earning(
+                user_id=post.user_id,
+                amount=LIKE_EARN
+            )
+
+            db.session.add(earning)
+
+            add_to_wallet(post.user_id, LIKE_EARN)
+
+            like.rewarded = True
+
     db.session.commit()
 
-    count = Like.query.filter_by(post_id=post_id).count()
+    count = Like.query.filter_by(
+        post_id=post_id,
+        is_active=True
+    ).count()
 
     return jsonify({
-        "liked": True,
+        "liked": like.is_active,
         "count": count
     })
 
@@ -1410,13 +1435,17 @@ def get_posts():
 
     for p in posts:
 
-        likes_count = Like.query.filter_by(post_id=p.id).count()
+        likes_count = Like.query.filter_by(
+            post_id=p.id,
+            is_active=True
+        ).count()
 
         comments_count = Comment.query.filter_by(post_id=p.id).count()
 
         liked = Like.query.filter_by(
             user_id=session["user_id"],
-            post_id=p.id
+            post_id=p.id,
+            is_active=True
         ).first() is not None
 
         result.append({
