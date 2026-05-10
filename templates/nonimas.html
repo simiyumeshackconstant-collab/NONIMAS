@@ -17,9 +17,15 @@ body{
     display:flex;
     justify-content:space-between;
     align-items:center;
-    padding:10px 20px;
+
+    padding:45px 20px 15px 20px;
+
     background:#12002b;
     border-bottom:1px solid #2de2e6;
+
+    position:sticky;
+    top:0;
+    z-index:1000;
 }
 
 .logo{color:#7cf7ff;font-size:20px}
@@ -46,12 +52,16 @@ body{
 }
 
 /* Feed should TAKE ALL REMAINING SPACE */
+
 .feed-container{
     flex:1;
-    padding:15px;
-    max-width:800px;   /* keeps it readable like Facebook */
-    margin:0 auto;     /* center ONLY when screen is huge */
+
+    padding:30px 15px 15px 15px;
+
+    max-width:800px;
+    margin:0 auto;
 }
+
 textarea{
     width:100%;
     background:#140030;
@@ -71,7 +81,22 @@ textarea{
     color:white;
     cursor:pointer;
 }
+.media-btn{
+    width:100%;
+    padding:12px;
+    margin-bottom:10px;
 
+    border:none;
+    border-radius:10px;
+
+    background:#1f0045;
+    color:white;
+
+    font-size:15px;
+    cursor:pointer;
+
+    border:1px solid #2de2e6;
+}
 .post{
     background:#140030;
     border:1px solid #2de2e6;
@@ -150,7 +175,16 @@ textarea{
 <div class="feed-container">
 
     <textarea id="content" placeholder="Post anonymously..."></textarea>
-    <input type="file" id="file">
+    <button class="media-btn" onclick="openMediaPicker()">
+        📷 Files
+    </button>
+    <div id="selected-file" style="margin-bottom:10px;color:#7cf7ff;"></div>
+    <input
+        type="file"
+        id="file"
+        accept="image/*,video/*"
+        style="display:none;"
+    >
     <button class="btn" onclick="createPost()">Post</button>
 
     <div id="feed"></div>
@@ -267,6 +301,19 @@ async function createPost(){
         console.error(err);
     }
 }
+
+function openMediaPicker(){
+    document.getElementById("file").click();
+}
+document.getElementById("file").addEventListener("change", function(){
+
+    let file = this.files[0];
+
+    if(file){
+        document.getElementById("selected-file").innerHTML =
+            "Selected: " + file.name;
+    }
+});
 /* LIKE POST */
 function likePost(postId){
     fetch("/like_post",{
