@@ -197,9 +197,8 @@ footer {
 </footer>
 
 </body>
-```html
 <!-- INSTALL APP CARD -->
-<div id="install-card">
+<div id="install-card" style="display:none;">
 
     <div class="install-content">
 
@@ -364,33 +363,33 @@ footer {
 
 <script>
 
-function hideInstallCard(){
+function showInstallCard(){
 
-    document.getElementById(
-        "install-card"
-    ).style.display = "none";
+    const hidden = localStorage.getItem("nonimas_install_hidden");
 
-    // optional memory
-    localStorage.setItem(
-        "nonimas_install_hidden",
-        "yes"
-    );
+    if(hidden === "yes") return;
+
+    document.getElementById("install-card").style.display = "block";
 }
 
-/* prevent showing again */
+function hideInstallCard(){
 
+    document.getElementById("install-card").style.display = "none";
+
+    localStorage.setItem("nonimas_install_hidden", "yes");
+}
+
+/* show ONLY after full page load + delay */
 window.addEventListener("load", ()=>{
 
-    if(
-        localStorage.getItem(
-            "nonimas_install_hidden"
-        ) === "yes"
-    ){
-        document.getElementById(
-            "install-card"
-        ).style.display = "none";
-    }
+    setTimeout(()=>{
+
+        showInstallCard();
+
+    }, 1500); // gives user time to see page first
+
 });
+
 </script>
 
 

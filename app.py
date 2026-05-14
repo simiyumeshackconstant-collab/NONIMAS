@@ -99,7 +99,19 @@ COMMENT_EARN = 0.0025
 
 #-------------------- File Upload Setup ----------------
 
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "mp4", "mov", "pdf", "docx"}
+ALLOWED_EXTENSIONS = {
+    "png",
+    "jpg",
+    "jpeg",
+    "webp",
+    "heic",
+    "heif",
+    "mp4",
+    "mov",
+    "pdf",
+    "docx"
+    "apk"
+}
 
 def allowed_file(filename):
 
@@ -1623,19 +1635,19 @@ def create_post():
         )
 
 
-            if filename.lower().endswith((".png", ".jpg", ".jpeg")):
+            mime_type = file.mimetype or ""
+
+            if mime_type.startswith("image/"):
 
                 media_type = "image"
 
-            elif filename.lower().endswith((".mp4", ".mov")):
+            elif mime_type.startswith("video/"):
 
                 media_type = "video"
 
             else:
 
                 media_type = "file"
-
-
         post = Post(
 
             user_id=user_id,
