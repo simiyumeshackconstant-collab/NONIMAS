@@ -1,273 +1,420 @@
 <!DOCTYPE html>
-
-<html>
+<html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>My Profile</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat</title>
 
 <style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial;
+}
+
 body{
     background:#0b0018;
     color:white;
-    font-family:Arial;
-    margin:0;
+    height:100vh;
+    overflow:hidden;
 }
 
-/* HEADER */
-.header{
+/* layout */
+.container{
     display:flex;
-    justify-content:space-between;
-    align-items:center;
-    padding:10px 20px;
+    height:100vh;
+}
+
+/* sidebar */
+.sidebar{
+    width:35%;
     background:#12002b;
+    border-right:1px solid #2de2e6;
+    overflow-y:auto;
+}
+
+.sidebar h2{
+    padding:15px;
+    color:#7cf7ff;
     border-bottom:1px solid #2de2e6;
 }
 
-.logo{ color:#7cf7ff; }
-
-.top-btn{
-    background:#1f0045;
-    border:none;
-    color:white;
-    padding:8px 12px;
-    border-radius:8px;
+.buddy{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:12px;
     cursor:pointer;
+    border-bottom:1px solid #1c0040;
 }
 
-/* CONTAINER */
-.container{
-    max-width:500px;
-    margin:auto;
-    padding:20px;
+.buddy:hover{
+    background:#1a0038;
 }
 
-/* CARD */
-.card{
-    background:#140030;
-    border:1px solid #2de2e6;
-    border-radius:15px;
-    padding:20px;
-    text-align:center;
-}
-
-/* AVATAR */
-.avatar{
-    width:110px;
-    height:110px;
+.buddy img{
+    width:50px;
+    height:50px;
     border-radius:50%;
     border:2px solid #2de2e6;
-    object-fit:cover;
-    cursor:pointer;
 }
 
-/* NAME */
-.name{
-    margin-top:10px;
-    font-size:18px;
-    color:#7cf7ff;
-}
-
-/* STATS */
-.stats{
-    margin-top:8px;
-    font-size:13px;
-    color:#aaa;
-}
-
-.stat{
-    margin:0 10px;
-    cursor:pointer;
-}
-
-.stat:hover{
-    color:#2de2e6;
-}
-
-/* BIO */
-textarea{
-    width:100%;
-    margin-top:10px;
-    padding:10px;
-    border:1px solid #2de2e6;
-    background:#0f0025;
+/* unread badge */
+.user-badge{
+    position:absolute;
+    top:-2px;
+    right:-2px;
+    background:red;
     color:white;
-    border-radius:8px;
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    font-size:11px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
 }
 
-/* BUTTON */
-.btn{
-    margin-top:15px;
-    width:100%;
+/* chat area */
+.chat-area{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+}
+
+/* HEADER */
+.chat-header{
+    padding:15px;
+    border-bottom:1px solid #2de2e6;
+    background:#12002b;
+
+    display:flex;
+    align-items:center;
+    gap:10px;
+
+    position:sticky;
+    top:0;
+    z-index:1000;
+}
+
+.chat-header img{
+    width:40px;
+    height:40px;
+    border-radius:50%;
+}
+
+/* chat box */
+.chat-box{
+    flex:1;
+    overflow-y:auto;
+    padding:15px;
+}
+
+/* messages */
+.msg{
+    max-width:75%;
+    padding:10px;
+    border-radius:12px;
+    margin-bottom:12px;
+    word-wrap:break-word;
+}
+
+.me{
+    background:#2de2e6;
+    color:black;
+    margin-left:auto;
+}
+
+.them{
+    background:#1f0045;
+    border:1px solid #2de2e6;
+}
+
+/* input */
+.input{
+    display:flex;
+    padding:10px;
+    gap:8px;
+    border-top:1px solid #2de2e6;
+    background:#12002b;
+}
+
+.input input{
+    flex:1;
     padding:12px;
     border:none;
-    border-radius:10px;
-    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+    border-radius:25px;
+    background:#1f0045;
     color:white;
+}
+
+.input button{
+    padding:12px 18px;
+    border:none;
+    border-radius:25px;
+    background:#2de2e6;
+    color:black;
     cursor:pointer;
 }
 
-/* POSTS */
-.posts{
-    margin-top:20px;
-}
-
-.post{
-    background:#140030;
-    border:1px solid #2de2e6;
-    border-radius:12px;
+.clear-btn{
+    border:none;
     padding:12px;
-    margin-top:10px;
+    background:#1f0045;
+    color:white;
+    cursor:pointer;
+    border-top:1px solid #2de2e6;
+    width:100%;
 }
-</style>
 
+/* MOBILE FIX (WhatsApp style) */
+@media(max-width:768px){
+
+    .sidebar{
+        width:100%;
+        height:100vh;
+    }
+
+    .chat-area{
+        display:none;
+        position:fixed;
+        top:0;
+        left:0;
+        width:100%;
+        height:100vh;
+        background:#0b0018;
+        z-index:999;
+    }
+
+    .chat-area.active{
+        display:flex;
+        flex-direction:column;
+    }
+
+    .sidebar.hide{
+        display:none;
+    }
+
+    /* important scrolling fix */
+    .chat-box{
+        flex:1;
+        overflow-y:auto;
+        padding-bottom:140px;
+    }
+
+    /* fixed input like WhatsApp */
+    .input{
+        position:fixed;
+        bottom:55px;
+        left:0;
+        right:0;
+        z-index:1000;
+    }
+
+    /* ALWAYS visible clear button */
+    .clear-btn{
+        position:fixed;
+        bottom:0;
+        left:0;
+        right:0;
+        height:55px;
+        z-index:1001;
+        border-radius:0;
+    }
+}
+
+</style>
 </head>
 
 <body>
 
-<div class="header">
-    <button class="top-btn" onclick="location.href='/'">🏠 Feed</button>
-    <div class="logo">👤 My Profile</div>
-    <button class="top-btn" onclick="location.href='/logout'">Logout</button>
-</div>
-
 <div class="container">
 
-```
-<div class="card">
-
-    <!-- CLICKABLE AVATAR -->
-    <img id="avatarPreview"
-         src="/uploads/user_dp/{{ user.user_dp_pic }}"
-         class="avatar"
-         onclick="document.getElementById('fileInput').click()"
-         onerror="this.src='/uploads/default_avatar.jpeg'">
-
-    <!-- HIDDEN FILE INPUT -->
-    <input type="file" id="fileInput" style="display:none">
-
-    <!-- NAME (DISPLAY ONLY) -->
-    <div class="name">{{ user.full_name }}</div>
-
-    <!-- STATS -->
-    <div class="stats">
-        <span class="stat" onclick="viewFollowers()">
-            {{ followers_count }} BUDDIES
-        </span>
-        |
-        <span class="stat" onclick="viewFollowing()">
-            {{ following_count }} ADDED
-        </span>
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+        <h2>Chats</h2>
+        <div id="buddies"></div>
     </div>
 
-    <!-- BIO -->
-    <textarea id="bioInput" rows="3">{{ user.bio }}</textarea>
+    <!-- CHAT AREA -->
+    <div class="chat-area" id="chatArea">
 
-    <button class="btn" onclick="saveProfile()">Save Changes</button>
+        <div class="chat-header" id="activeUser">
+            Select a user
+        </div>
 
-</div>
+        <div class="chat-box" id="chat"></div>
 
-<!-- POSTS -->
-<div class="posts">
-    <h3 style="color:#7cf7ff;">My Posts</h3>
-    <div id="my_posts"></div>
-</div>
-```
+        <div class="input">
+            <input id="msg" placeholder="Type message...">
+            <button onclick="send()">Send</button>
+        </div>
+
+        <button class="clear-btn" onclick="clearChat()">
+            Clear Chat
+        </button>
+
+    </div>
 
 </div>
 
 <script>
 
-let user_id = "{{ user.id }}";
+let myId="{{ session.get('user_id') }}";
+let currentUser=null;
 
-/* NAVIGATION */
-function viewFollowers(){
-    window.location.href = "/followers/" + user_id;
-}
+/* load buddies */
+function loadBuddies(){
+fetch("/mutual_buddies")
+.then(r=>r.json())
+.then(data=>{
 
-function viewFollowing(){
-    window.location.href = "/following/" + user_id;
-}
+let html="";
 
-/* LIVE AVATAR PREVIEW */
-let selectedFile = null;
+data.users.forEach(u=>{
+html+=`
+<div class="buddy" onclick="selectUser(${u.id},'${u.name}','${u.dp}')">
 
-document.getElementById("fileInput").addEventListener("change", function(e){
-    selectedFile = e.target.files[0];
+    <div style="position:relative;">
 
-    if(selectedFile){
-        let reader = new FileReader();
-        reader.onload = function(e){
-            document.getElementById("avatarPreview").src = e.target.result;
-        }
-        reader.readAsDataURL(selectedFile);
-    }
+        <img src="/uploads/user_dp/${u.dp}"
+             onerror="this.src='/uploads/default_avatar.jpeg'">
+
+        <div class="user-badge" id="badge-${u.id}" style="display:none;">
+            0
+        </div>
+
+    </div>
+
+    <span>${u.name}</span>
+
+</div>`;
 });
 
-/* SAVE PROFILE (NO RELOAD) */
-function saveProfile(){
+document.getElementById("buddies").innerHTML=html;
 
-    let formData = new FormData();
+});
+}
 
-    formData.append("bio", document.getElementById("bioInput").value);
+/* unread counts */
+function loadUnreadCounts(){
 
-    if(selectedFile){
-        formData.append("user_dp_pic", selectedFile);
+fetch("/unread_counts")
+.then(r=>r.json())
+.then(data=>{
+
+    const users = data.users || {};
+
+    document.querySelectorAll(".user-badge")
+    .forEach(b=>b.style.display="none");
+
+    for(let uid in users){
+
+        let badge = document.getElementById(`badge-${uid}`);
+
+        if(badge){
+            badge.style.display="flex";
+            badge.innerText = users[uid];
+        }
     }
 
-    fetch("/dp", {
-        method: "POST",
-        body: formData
-    })
-    .then(res => res.text())
-    .then(() => {
-        alert("Profile updated");
-    })
-    .catch(err => {
-        console.error(err);
-        alert("Update failed");
-    });
+});
 }
 
-/* LOAD POSTS (NO RELOAD) */
-function loadPosts(){
+/* select user */
+function selectUser(id,name,dp){
 
-    fetch(`/posts/${user_id}`)
-    .then(res => res.json())
-    .then(data => {
+currentUser=id;
 
-        let container = document.getElementById("my_posts");
-        container.innerHTML = "";
+document.getElementById("activeUser").innerHTML=`
+<img src="/uploads/user_dp/${dp}"
+     onerror="this.src='/uploads/default_avatar.jpeg'">
+<div>${name}</div>
+`;
 
-        if(!data || data.length === 0){
-            container.innerHTML = "<p style='color:#777'>No posts yet</p>";
-            return;
-        }
+document.getElementById("chatArea").classList.add("active");
+document.getElementById("sidebar").classList.add("hide");
 
-        data.forEach(p => {
-
-            let media = "";
-
-            if(p.media){
-                if(p.type === "image"){
-                    media = `<img src="${p.media}" style="width:100%;border-radius:10px;">`;
-                } else if(p.type === "video"){
-                    media = `<video src="${p.media}" controls style="width:100%"></video>`;
-                }
-            }
-
-            container.innerHTML += `
-                <div class="post">
-                    <p>${p.content || ""}</p>
-                    ${media}
-                </div>
-            `;
-        });
-
-    });
+loadChat();
 }
 
-loadPosts();
+/* load chat */
+function loadChat(){
+
+if(!currentUser)return;
+
+fetch(`/get_messages/${myId}/${currentUser}`)
+.then(r=>r.json())
+.then(data=>{
+
+let html="";
+
+data.forEach(m=>{
+let cls=m.sender==myId?"msg me":"msg them";
+html+=`<div class="${cls}">${m.message}</div>`;
+});
+
+let box=document.getElementById("chat");
+box.innerHTML=html;
+box.scrollTop=box.scrollHeight;
+
+});
+}
+
+/* send */
+function send(){
+
+let msg=document.getElementById("msg").value.trim();
+
+if(!msg||!currentUser)return;
+
+fetch("/send_message",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+receiver_id:currentUser,
+message:msg
+})
+})
+.then(()=>{
+
+document.getElementById("msg").value="";
+loadChat();
+
+});
+}
+
+/* clear chat */
+function clearChat(){
+
+if(!currentUser){
+    alert("Select a chat first");
+    return;
+}
+
+if(!confirm("Clear this chat for both users?")) return;
+
+fetch("/clear_chat",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+user1:myId,
+user2:currentUser
+})
+})
+.then(()=>{
+document.getElementById("chat").innerHTML="";
+});
+
+}
+
+/* auto refresh */
+setInterval(loadChat,2000);
+setInterval(loadUnreadCounts,2000);
+
+loadBuddies();
 
 </script>
 
