@@ -406,7 +406,7 @@ async function loadPosts(){
 
             if(p.type === "image"){
                 media = `
-                <img src="${p.media}" style="
+                <img src="${p.media}?t=${Date.now()}" style="
                     width:100%;
                     max-height:500px;
                     object-fit:cover;
@@ -422,7 +422,7 @@ async function loadPosts(){
                     border-radius:10px;
                     margin-top:10px;
                 ">
-                    <source src="${p.media}">
+                    <source src="${p.media}" type="video/mp4">
                 </video>`;
             }
 
@@ -579,4 +579,197 @@ function sendGift(postId, receiverId, giftId){
 loadPosts();
 </script>
 </body>
+<!-- INSTALL APP CARD -->
+<div id="install-card">
+
+    <div class="install-content">
+
+        <img
+            src="/static/nonimas_logo.png"
+            class="install-logo"
+        >
+
+        <div class="install-text">
+            <h3>Install Nonimas App</h3>
+            <p>Faster access. Better experience.</p>
+        </div>
+
+    </div>
+
+    <div class="install-actions">
+
+        <a href="/nonimas.apk" download class="install-btn">
+            Download APK
+        </a>
+
+        <button class="later-btn" onclick="hideInstallCard()">
+            Continue Web
+        </button>
+
+    </div>
+
+</div>
+
+<style>
+
+#install-card{
+
+    position:fixed;
+
+    bottom:20px;
+    left:20px;
+    right:20px;
+
+    background:linear-gradient(
+        135deg,
+        #140030,
+        #1f0045
+    );
+
+    border:1px solid #2de2e6;
+
+    border-radius:18px;
+
+    padding:18px;
+
+    z-index:99999;
+
+    box-shadow:
+        0 0 20px rgba(45,226,230,0.25);
+
+    animation:slideUp 0.4s ease;
+
+    max-width:500px;
+
+    margin:auto;
+}
+
+.install-content{
+    display:flex;
+    align-items:center;
+    gap:15px;
+}
+
+.install-logo{
+    width:60px;
+    height:60px;
+    border-radius:14px;
+}
+
+.install-text h3{
+    margin:0;
+    color:#7cf7ff;
+    font-size:18px;
+}
+
+.install-text p{
+    margin-top:5px;
+    color:#ddd;
+    font-size:14px;
+}
+
+.install-actions{
+    display:flex;
+    gap:10px;
+    margin-top:18px;
+}
+
+.install-btn{
+
+    flex:1;
+
+    text-align:center;
+
+    padding:12px;
+
+    border-radius:12px;
+
+    text-decoration:none;
+
+    font-weight:bold;
+
+    background:linear-gradient(
+        45deg,
+        #2de2e6,
+        #7b2ff7
+    );
+
+    color:white;
+}
+
+.later-btn{
+
+    flex:1;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:#0f0020;
+
+    color:white;
+
+    cursor:pointer;
+}
+
+@keyframes slideUp{
+
+    from{
+        transform:translateY(100px);
+        opacity:0;
+    }
+
+    to{
+        transform:translateY(0);
+        opacity:1;
+    }
+}
+
+/* MOBILE */
+
+@media(max-width:600px){
+
+    #install-card{
+        left:10px;
+        right:10px;
+        bottom:10px;
+    }
+
+    .install-actions{
+        flex-direction:column;
+    }
+}
+</style>
+
+<script>
+
+function hideInstallCard(){
+
+    document.getElementById(
+        "install-card"
+    ).style.display = "none";
+
+    // optional memory
+    localStorage.setItem(
+        "nonimas_install_hidden",
+        "yes"
+    );
+}
+
+/* prevent showing again */
+
+window.addEventListener("load", ()=>{
+
+    if(
+        localStorage.getItem(
+            "nonimas_install_hidden"
+        ) === "yes"
+    ){
+        document.getElementById(
+            "install-card"
+        ).style.display = "none";
+    }
+});
+</script>
+
 </html>

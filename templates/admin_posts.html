@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Posts</title>
+
+    <style>
+
+        body{
+            background:#0f172a;
+            color:white;
+            font-family:Arial;
+            margin:0;
+            padding:20px;
+        }
+
+        h1{
+            margin-bottom:20px;
+        }
+
+        .top-actions{
+            display:flex;
+            gap:10px;
+            margin-bottom:20px;
+            flex-wrap:wrap;
+        }
+
+        button{
+            padding:10px 16px;
+            border:none;
+            border-radius:8px;
+            cursor:pointer;
+            font-weight:bold;
+        }
+
+        .delete-selected{
+            background:#dc2626;
+            color:white;
+        }
+
+        .clear-all{
+            background:black;
+            color:white;
+        }
+
+        .post-card{
+            background:#1e293b;
+            padding:15px;
+            border-radius:12px;
+            margin-bottom:20px;
+        }
+
+        .post-header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:10px;
+        }
+
+        .post-content{
+            margin:10px 0;
+        }
+
+        img, video{
+            width:100%;
+            max-height:400px;
+            object-fit:cover;
+            border-radius:10px;
+            margin-top:10px;
+        }
+
+        .stats{
+            margin-top:10px;
+            color:#cbd5e1;
+            font-size:14px;
+        }
+
+        .single-delete{
+            background:#ef4444;
+            color:white;
+            margin-top:10px;
+        }
+
+        a{
+            color:white;
+            text-decoration:none;
+        }
+
+    </style>
+
+</head>
+<body>
+
+    <h1>Manage Posts</h1>
+
+    <div class="top-actions">
+
+        <form method="POST" action="{{ url_for('clear_all_posts') }}"
+              onsubmit="return confirm('Delete ALL posts?')">
+
+            <button class="clear-all">
+                Clear All Posts
+            </button>
+
+        </form>
+
+    </div>
+
+    <form method="POST"
+          action="{{ url_for('delete_selected_posts') }}"
+          onsubmit="return confirm('Delete selected posts?')">
+
+        <button class="delete-selected">
+            Delete Selected
+        </button>
+
+        <br><br>
+
+        {% for post in posts %}
+
+        <div class="post-card">
+
+            <div class="post-header">
+
+                <div>
+                    <input type="checkbox"
+                           name="post_ids"
+                           value="{{ post.id }}">
+
+                    <strong>{{ post.user_name }}</strong>
+                </div>
+
+                <small>
+                    {{ post.created_at.strftime("%Y-%m-%d %H:%M") }}
+                </small>
+
+            </div>
+
+            <div class="post-content">
+                {{ post.content }}
+            </div>
+
+            {% if post.media %}
+
+                {% if post.type == "image" %}
+
+                    <img src="{{ post.media }}">
+
+                {% elif post.type == "video" %}
+
+                    <video controls>
+                        <source src="{{ post.media }}">
+                    </video>
+
+                {% endif %}
+
+            {% endif %}
+
+            <div class="stats">
+                ❤️ {{ post.likes }}
+                |
+                💬 {{ post.comments }}
+                |
+                🎁 {{ post.gifts }}
+            </div>
+
+            <form method="POST"
+                  action="{{ url_for('delete_post_admin', post_id=post.id) }}"
+                  onsubmit="return confirm('Delete this post?')">
+
+                <button class="single-delete">
+                    Delete This Post
+                </button>
+
+            </form>
+
+        </div>
+
+        {% endfor %}
+
+    </form>
+
+</body>
+</html>

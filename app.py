@@ -121,11 +121,18 @@ os.makedirs(app.config["user_dp_folder"], exist_ok=True)
 #------------------- Routes for Uploaded Files -----------------
 
 @app.route("/uploads/<path:filename>")
-
 def uploaded_file(filename):
 
-    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+    response = send_from_directory(
+        app.config["UPLOAD_FOLDER"],
+        filename
+    )
 
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    return response
 
 @app.route("/uploads/user_dp/<path:filename>")
 
@@ -694,40 +701,269 @@ def login():
 
 @app.route("/admin_dashboard")
 @login_required
+@admin_required
 def admin_dashboard():
 
     if not session.get("is_admin"):
         return redirect(url_for("nonimas"))
 
-    # 💰 TOTAL REVENUE (money spent buying gifts)
+    # 💰 TOTAL REVENUE
     revenue = db.session.query(
         db.func.sum(GiftTransaction.total_amount)
     ).scalar() or 0
 
-    # 💸 TOTAL PAYOUTS (creator earnings)
+    # 💸 TOTAL PAYOUTS
     payouts = db.session.query(
         db.func.sum(Earning.amount)
     ).scalar() or 0
 
-    # 📈 PLATFORM PROFIT
+    # 📈 PROFIT
     profit = revenue - payouts
 
-    # 🎁 MOST POPULAR GIFTS (by quantity)
+    # 👥 TOTAL USERS
+    total_users = User.query.count()
+
+    # 📝 TOTAL POSTS
+    total_posts = Post.query.count()
+
+    # 💬 TOTAL COMMENTS
+    total_comments = Comment.query.count()
+
+    # ❤️ TOTAL LIKES
+    total_likes = Like.query.filter_by(is_active=True).count()
+
+    # 🎁 TOTAL GIFTS SENT
+    total_gifts = db.session.query(
+        db.func.sum(GiftTransaction.quantity)
+    ).scalar() or 0
+
+    # 💵 TOTAL WALLET MONEY
+    total_wallet = db.session.query(
+        db.func.sum(Wallet.balance)
+    ).scalar() or 0
+
+    # 🎁 MOST POPULAR GIFTS
     popular_gifts = db.session.query(
         Gift.name,
         db.func.sum(GiftTransaction.quantity)
-    ).join(GiftTransaction, Gift.id == GiftTransaction.gift_id)\
-     .group_by(Gift.name)\
-     .order_by(db.func.sum(GiftTransaction.quantity).desc())\
-     .all()
+    ).join(
+        GiftTransaction,
+        Gift.id == GiftTransaction.gift_id
+    ).group_by(
+        Gift.name
+    ).order_by(
+        db.func.sum(GiftTransaction.quantity).desc()
+    ).limit(10).all()
+
+    # 🏆 TOP CREATORS
+    top_creators = db.session.query(
+        User.full_name,
+        db.func.sum(Earning.amount)
+    ).join(
+        Earning,
+        User.id == Earning.user_id
+    ).group_by(
+        User.full_name
+    ).order_by(
+        db.func.sum(Earning.amount).desc()
+    ).limit(10).all()
+
+    # 🕒 RECENT USERS
+    recent_users = User.query.order_by(
+        User.timestamp.desc()
+    ).limit(10).all()
+
+    # 🕒 RECENT POSTS
+    recent_posts = Post.query.order_by(
+        Post.created_at.desc()
+    ).limit(10).all()
 
     return render_template(
         "admin_dashboard.html",
         revenue=revenue,
         payouts=payouts,
         profit=profit,
-        popular_gifts=popular_gifts
+        total_users=total_users,
+        total_posts=total_posts,
     )
+@app.route("/delete_post_admin/<int:post_id>", methods=["POST"])
+@admin_required
+def delete_post_admin(post_id):
+
+    post = Post.query.get_or_404(post_id)
+
+    # delete media file
+    if post.media_url:
+
+        try:
+
+            filename = post.media_url.split("/uploads/")[-1]
+
+            path = os.path.join(
+                app.config["UPLOAD_FOLDER"],
+                filename
+            )
+
+            if os.path.exists(path):
+                os.remove(path)
+
+        except Exception as e:
+            print("Media delete error:", e)
+
+    # delete likes
+    Like.query.filter_by(post_id=post.id).delete()
+
+    # delete comments
+    Comment.query.filter_by(post_id=post.id).delete()
+
+    # delete gift transactions
+    GiftTransaction.query.filter_by(post_id=post.id).delete()
+
+    # finally delete post
+    db.session.delete(post)
+
+    db.session.commit()
+
+    flash("Post deleted successfully")
+
+    return redirect(url_for("admin_posts"))
+# -------- ADMIN POSTS PAGE --------
+
+@app.route("/admin_posts")
+@login_required
+@admin_required
+def admin_posts():
+
+    posts = Post.query.order_by(Post.created_at.desc()).all()
+
+    result = []
+
+    for p in posts:
+
+        user = User.query.get(p.user_id)
+
+        likes = Like.query.filter_by(
+            post_id=p.id,
+            is_active=True
+        ).count()
+
+        comments = Comment.query.filter_by(
+            post_id=p.id
+        ).count()
+
+        gifts = db.session.query(
+            db.func.sum(GiftTransaction.quantity)
+        ).filter_by(post_id=p.id).scalar() or 0
+
+        result.append({
+            "id": p.id,
+            "user_name": user.full_name if user else "Unknown",
+            "content": p.content,
+            "media": p.media_url,
+            "type": p.media_type,
+            "created_at": p.created_at,
+            "likes": likes,
+            "comments": comments,
+            "gifts": gifts
+        })
+
+    return render_template(
+        "admin_posts.html",
+        posts=result
+    )
+
+
+# -------- DELETE SELECTED POSTS --------
+
+@app.route("/delete_selected_posts", methods=["POST"])
+@login_required
+@admin_required
+def delete_selected_posts():
+
+    post_ids = request.form.getlist("post_ids")
+
+    if not post_ids:
+        flash("No posts selected")
+        return redirect(url_for("admin_posts"))
+
+    for pid in post_ids:
+
+        post = Post.query.get(pid)
+
+        if not post:
+            continue
+
+        # delete media
+        if post.media_url:
+
+            try:
+
+                filename = post.media_url.split("/uploads/")[-1]
+
+                path = os.path.join(
+                    app.config["UPLOAD_FOLDER"],
+                    filename
+                )
+
+                if os.path.exists(path):
+                    os.remove(path)
+
+            except Exception as e:
+                print("Delete error:", e)
+
+        Like.query.filter_by(post_id=post.id).delete()
+        Comment.query.filter_by(post_id=post.id).delete()
+        GiftTransaction.query.filter_by(post_id=post.id).delete()
+
+        db.session.delete(post)
+
+    db.session.commit()
+
+    flash("Selected posts deleted successfully")
+
+    return redirect(url_for("admin_posts"))
+
+
+# -------- CLEAR ALL POSTS --------
+
+@app.route("/clear_all_posts", methods=["POST"])
+@login_required
+@admin_required
+def clear_all_posts():
+
+    posts = Post.query.all()
+
+    for post in posts:
+
+        # delete media
+        if post.media_url:
+
+            try:
+
+                filename = post.media_url.split("/uploads/")[-1]
+
+                path = os.path.join(
+                    app.config["UPLOAD_FOLDER"],
+                    filename
+                )
+
+                if os.path.exists(path):
+                    os.remove(path)
+
+            except Exception as e:
+                print("Delete error:", e)
+
+        Like.query.filter_by(post_id=post.id).delete()
+        Comment.query.filter_by(post_id=post.id).delete()
+        GiftTransaction.query.filter_by(post_id=post.id).delete()
+
+        db.session.delete(post)
+
+    db.session.commit()
+
+    flash("All posts cleared successfully")
+
+    return redirect(url_for("admin_posts"))
 # ----------- Logout -----------
 
 @app.route("/logout")
@@ -1373,14 +1609,18 @@ def create_post():
 
         if file:
 
-            filename = str(uuid.uuid4()) + "_" + file.filename
+            filename = secure_filename(
+                str(uuid.uuid4()) + "_" + file.filename
+            )
 
-            path = os.path.join(UPLOAD_FOLDER, filename)
+            path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
 
             file.save(path)
 
-
-            media_url = "/" + path
+            media_url = url_for(
+                "uploaded_file",
+                filename=filename
+        )
 
 
             if filename.lower().endswith((".png", ".jpg", ".jpeg")):

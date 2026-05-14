@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+}
+
+.back-btn{
+    display:inline-block;
+    margin-bottom:20px;
+
+    padding:10px 15px;
+
+    background:#1f0045;
+    color:white;
+
+    border-radius:10px;
+    text-decoration:none;
+}
+</style>
+</head>
+
+<body>
+
+<a class="back-btn" href="/admin_dashboard">
+    ← Back Dashboard
+</a>
+
+<div class="title">
+    Admin Post Manager
+</div>
+
+{% for p in posts %}
+
+<div class="post">
+
+    <div class="user">
+        👤 {{ p.user_name }}
+    </div>
+
+    <div>
+        {{ p.content }}
+    </div>
+
+    {% if p.media %}
+
+        {% if p.type == 'image' %}
+
+            <img src="{{ p.media }}">
+
+        {% elif p.type == 'video' %}
+
+            <video controls>
+                <source src="{{ p.media }}" type="video/mp4">
+            </video>
+
+        {% else %}
+
+            <a href="{{ p.media }}" target="_blank">
+                Download File
+            </a>
+
+        {% endif %}
+
+    {% endif %}
+
+    <form
+        method="POST"
+        action="/delete_post_admin/{{ p.id }}"
+        onsubmit="return confirm('Delete this post?')"
+    >
+
+        <button class="delete-btn">
+            🗑 Delete Post
+        </button>
+
+    </form>
+
+</div>
+
+{% endfor %}
+
+</body>
+</html>
