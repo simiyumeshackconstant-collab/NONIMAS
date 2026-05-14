@@ -598,7 +598,9 @@ loadPosts();
 
     <div class="install-actions">
 
-        <a href="/nonimas.apk" download class="install-btn">
+        <a href="{{ url_for('static', filename='nonimas.apk') }}"
+            download="nonimas.apk"
+            class="install-btn">
             Download APK
         </a>
 
