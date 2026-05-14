@@ -86,7 +86,28 @@ body{
     height:40px;
     border-radius:50%;
 }
+.user-badge{
 
+    position:absolute;
+
+    top:-2px;
+    right:-2px;
+
+    background:red;
+
+    color:white;
+
+    width:18px;
+    height:18px;
+
+    border-radius:50%;
+
+    font-size:11px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
 .clear-btn{
     border:none;
     padding:12px;
@@ -219,12 +240,53 @@ let html="";
 data.users.forEach(u=>{
 html+=`
 <div class="buddy" onclick="selectUser(${u.id},'${u.name}','${u.dp}')">
-<img src="/uploads/user_dp/${u.dp}" onerror="this.src='/uploads/default_avatar.jpeg'">
-<span>${u.name}</span>
+
+    <div style="position:relative;">
+
+        <img src="/uploads/user_dp/${u.dp}"
+             onerror="this.src='/uploads/default_avatar.jpeg'">
+
+        <div class="user-badge"
+             id="badge-${u.id}"
+             style="display:none;">
+            0
+        </div>
+
+    </div>
+
+    <span>${u.name}</span>
+
 </div>`;
 });
 
 document.getElementById("buddies").innerHTML=html;
+
+});
+}
+function loadUnreadCounts(){
+
+fetch("/unread_counts")
+.then(r=>r.json())
+.then(data=>{
+
+    const users = data.users || {};
+
+    document.querySelectorAll(".user-badge")
+    .forEach(b=>{
+        b.style.display="none";
+    });
+
+    for(let uid in users){
+
+        let badge = document.getElementById(`badge-${uid}`);
+
+        if(badge){
+
+            badge.style.display="flex";
+
+            badge.innerText = users[uid];
+        }
+    }
 
 });
 }
@@ -325,7 +387,13 @@ function clearChat(){
 
 /* auto refresh */
 setInterval(loadChat,2000);
+setInterval(()=>{
 
+    loadChat();
+
+    loadUnreadCounts();
+
+},2000);
 loadBuddies();
 
 </script>

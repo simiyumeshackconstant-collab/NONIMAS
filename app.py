@@ -1796,20 +1796,6 @@ def get_messages(user1, user2):
         "message": m.message
     } for m in messages])
 
-@app.route("/unread_counts")
-@login_required
-def unread_counts():
-
-    user_id = session["user_id"]
-
-    messages = ChatMessage.query.filter_by(receiver_id=user_id, is_read=False).all()
-
-    counts = {}
-
-    for m in messages:
-        counts[m.sender_id] = counts.get(m.sender_id, 0) + 1
-
-    return jsonify(counts)
 
 @app.route("/user/<int:user_id>")
 @login_required
@@ -1856,6 +1842,37 @@ def clear_chat():
 
 
     return jsonify({"success": True})
+
+@app.route("/unread_counts")
+@login_required
+def unread_counts():
+
+    user_id = session["user_id"]
+
+    unread = db.session.query(
+        ChatMessage.sender_id,
+        db.func.count(ChatMessage.id)
+    ).filter_by(
+        receiver_id=user_id,
+        is_read=False
+    ).group_by(
+        ChatMessage.sender_id
+    ).all()
+
+    counts = {}
+
+    total = 0
+
+    for sender_id, count in unread:
+
+        counts[str(sender_id)] = count
+
+        total += count
+
+    return jsonify({
+        "total": total,
+        "users": counts
+    })
 
 @socketio.on("join")
 def handle_join(data):
