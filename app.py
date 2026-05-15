@@ -21,7 +21,7 @@ load_dotenv()
 import os
 
 from sqlalchemy import text
-
+from werkzeug.exceptions import RequestEntityTooLarge
 from flask_sqlalchemy import SQLAlchemy
 
 import mimetypes
@@ -30,12 +30,47 @@ import string
 import uuid
 import smtplib
 from flask_wtf.csrf import CSRFProtect
-
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent
 from email.mime.text import MIMEText
 
 # ----------------- App Setup --------------
 
 app = Flask(__name__)
+# ----------------- STATIC -----------------
+
+STATIC_FOLDER = os.path.join(BASE_DIR, "static")
+
+# App icons/images
+APP_ICON_FOLDER = os.path.join(STATIC_FOLDER, "icons")
+
+# ----------------- UPLOADS -----------------
+
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+
+# User posts
+POST_UPLOAD_FOLDER = os.path.join(
+    UPLOAD_FOLDER,
+    "posts"
+)
+
+# User profile pictures
+DP_UPLOAD_FOLDER = os.path.join(
+    UPLOAD_FOLDER,
+    "user_dp_pics"
+)
+
+# Create folders if missing
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(POST_UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(DP_UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(APP_ICON_FOLDER, exist_ok=True)
+
+# Flask config
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["POST_UPLOAD_FOLDER"] = POST_UPLOAD_FOLDER
+app.config["DP_UPLOAD_FOLDER"] = DP_UPLOAD_FOLDER
+app.config["APP_ICON_FOLDER"] = APP_ICON_FOLDER
 
 # THEN initialize socketio AFTER app exists
 from flask_socketio import SocketIO, join_room, leave_room, emit
@@ -54,7 +89,7 @@ if not app.secret_key:
 
 app.config["APP_NAME"] = "SPACE LIO AI"
 
-
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 # ----------------- Database -----------------
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -120,43 +155,49 @@ def allowed_file(filename):
 
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+ALLOWED_MIME_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "video/mp4",
+    "video/quicktime",
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.android.package-archive"
+}
 
-UPLOAD_FOLDER = "uploads"
 
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+def allowed_mime_type(file):
 
-app.config["user_dp_folder"] = os.path.join(UPLOAD_FOLDER, "user_dp_pics")
-
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-os.makedirs(app.config["user_dp_folder"], exist_ok=True)
-
+    return file.mimetype in ALLOWED_MIME_TYPES
 
 #------------------- Routes for Uploaded Files -----------------
 
-@app.route("/uploads/<path:filename>")
-def uploaded_file(filename):
+@app.route("/uploads/posts/<path:filename>")
+def uploaded_post_file(filename):
 
-    response = send_from_directory(
-        app.config["UPLOAD_FOLDER"],
+    return send_from_directory(
+        app.config["POST_UPLOAD_FOLDER"],
         filename
     )
 
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
 
-    return response
+@app.route("/uploads/user_dp_pics/<path:filename>")
+def uploaded_dp_file(filename):
 
-@app.route("/uploads/user_dp/<path:filename>")
+    return send_from_directory(
+        app.config["DP_UPLOAD_FOLDER"],
+        filename
+    )
 
-def user_dp(filename):
+@app.errorhandler(RequestEntityTooLarge)
+def handle_large_file(e):
 
-    return send_from_directory(app.config["user_dp_folder"], filename)
-
-
-
+    return jsonify({
+        "error": "File too large"
+    }), 413
 # ---------------- MODELS ----------------
 
 class User(db.Model):
@@ -805,10 +846,10 @@ def delete_post_admin(post_id):
 
         try:
 
-            filename = post.media_url.split("/uploads/")[-1]
+            filename = os.path.basename(post.media_url)
 
             path = os.path.join(
-                app.config["UPLOAD_FOLDER"],
+                app.config["POST_UPLOAD_FOLDER"],
                 filename
             )
 
@@ -906,10 +947,10 @@ def delete_selected_posts():
 
             try:
 
-                filename = post.media_url.split("/uploads/")[-1]
+                filename = os.path.basename(post.media_url)
 
                 path = os.path.join(
-                    app.config["UPLOAD_FOLDER"],
+                    app.config["POST_UPLOAD_FOLDER"],
                     filename
                 )
 
@@ -948,10 +989,10 @@ def clear_all_posts():
 
             try:
 
-                filename = post.media_url.split("/uploads/")[-1]
+                filename = os.path.basename(post.media_url)
 
                 path = os.path.join(
-                    app.config["UPLOAD_FOLDER"],
+                    app.config["POST_UPLOAD_FOLDER"],
                     filename
                 )
 
@@ -1403,6 +1444,20 @@ def following():
 
     })
 
+@app.route("/user_stats/<int:user_id>")
+@login_required
+def user_stats(user_id):
+
+    followers = Buddy.query.filter_by(buddy_id=user_id).count()
+    following = Buddy.query.filter_by(user_id=user_id).count()
+
+    posts = Post.query.filter_by(user_id=user_id).count()
+
+    return jsonify({
+        "followers": followers,
+        "following": following,
+        "posts": posts
+    })
 
 @app.route("/dp", methods=['GET', 'POST'])
 
@@ -1443,7 +1498,10 @@ def dp():
 
             if user.user_dp_pic and user.user_dp_pic != 'default_avatar.png':
 
-                old_path = os.path.join(app.config['user_dp_folder'], user.user_dp_pic)
+                old_path = os.path.join(
+                    app.config["DP_UPLOAD_FOLDER"],
+                    user.user_dp_pic
+                )
 
                 if os.path.exists(old_path):
 
@@ -1452,7 +1510,7 @@ def dp():
 
             filename = secure_filename(f"user_{user.id}.{file.filename.rsplit('.',1)[1].lower()}")
 
-            file.save(os.path.join(app.config['user_dp_folder'], filename))
+            file.save(os.path.join(app.config['DP_UPLOAD_FOLDER'], filename))
 
 
             user.user_dp_pic = filename
@@ -1595,79 +1653,91 @@ def mutual_buddies():
 
 # -------- CREATE POST --------
 
+# -------- CREATE POST --------
+
 @app.route("/create_post", methods=["POST"])
-
 @login_required
-
 def create_post():
 
     try:
 
         content = request.form.get("content")
-
         user_id = session.get("user_id")
-
 
         file = request.files.get("file")
 
-        media_url = None
+        if file and file.filename.strip() == "":
+            return jsonify({
+                "error": "Invalid filename"
+            }), 400
 
+        media_url = None
         media_type = None
 
+        if file and file.filename != "":
 
-        if file:
+            if not allowed_file(file.filename):
+                return jsonify({
+                    "error": "Invalid file extension"
+                }), 400
 
-            filename = secure_filename(
-                str(uuid.uuid4()) + "_" + file.filename
+            if not allowed_mime_type(file):
+                return jsonify({
+                    "error": "Invalid file type"
+                }), 400
+
+            # Generate safe unique filename
+            ext = file.filename.rsplit(".", 1)[1].lower()
+
+            filename = f"{uuid.uuid4().hex}.{ext}"
+
+            filename = secure_filename(filename)
+
+            # SAVE INSIDE uploads/posts
+            save_path = os.path.join(
+                app.config["POST_UPLOAD_FOLDER"],
+                filename
             )
 
-            path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            file.save(save_path)
 
-            file.save(path)
-
+            # SAVE URL
             media_url = url_for(
                 "uploaded_file",
-                filename=filename
-        )
-
+                filename=f"posts/{filename}"
+            )
 
             mime_type = file.mimetype or ""
 
             if mime_type.startswith("image/"):
-
                 media_type = "image"
 
             elif mime_type.startswith("video/"):
-
                 media_type = "video"
 
             else:
-
                 media_type = "file"
+
         post = Post(
-
             user_id=user_id,
-
             content=content,
-
             media_url=media_url,
-
             media_type=media_type,
-
             anon_name="Anonymous"
         )
 
         db.session.add(post)
-
         db.session.commit()
 
-
-        return jsonify({"success": True})
-
+        return jsonify({
+            "success": True
+        })
 
     except Exception as e:
 
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 
 # -------- GET POSTS --------
