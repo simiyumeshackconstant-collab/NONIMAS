@@ -29,14 +29,14 @@ import random
 import string
 import uuid
 import smtplib
-from flask_wtf.csrf import CSRFProtect
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 from email.mime.text import MIMEText
 
 # ----------------- App Setup --------------
-
+from flask_wtf.csrf import CSRFProtect
 app = Flask(__name__)
+csrf = CSRFProtect(app)
 # ----------------- STATIC -----------------
 
 STATIC_FOLDER = os.path.join(BASE_DIR, "static")
@@ -155,23 +155,28 @@ def allowed_file(filename):
 
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
-ALLOWED_MIME_TYPES = {
-    "image/png",
-    "image/jpeg",
-    "image/webp",
-    "image/heic",
-    "image/heif",
-    "video/mp4",
-    "video/quicktime",
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.android.package-archive"
-}
-
-
 def allowed_mime_type(file):
 
-    return file.mimetype in ALLOWED_MIME_TYPES
+    if not file or not file.mimetype:
+        return False
+
+    mime = file.mimetype.lower()
+
+    # allow all images
+    if mime.startswith("image/"):
+        return True
+
+    # allow all videos
+    if mime.startswith("video/"):
+        return True
+
+    allowed = {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.android.package-archive"
+    }
+
+    return mime in allowed
 
 #------------------- Routes for Uploaded Files -----------------
 
@@ -477,6 +482,7 @@ def nonimas():
 
 # -------- PAGES --------
 @app.route("/like_post", methods=["POST"])
+@csrf.exempt
 @login_required
 def like_post():
 
@@ -549,6 +555,7 @@ def like_post():
     })
 
 @app.route("/add_comment", methods=["POST"])
+@csrf.exempt
 @login_required
 def add_comment():
 
@@ -593,6 +600,7 @@ def add_comment():
     })
 
 @app.route("/comments/<int:post_id>")
+@csrf.exempt
 @login_required
 def get_comments(post_id):
 
@@ -1157,6 +1165,7 @@ def get_gifts():
     ])
 # -------- BUY GIFT PAGE --------
 @app.route("/buy_gift", methods=["POST"])
+@csrf.exempt
 @login_required
 def buy_gift():
     data = request.json
@@ -1234,6 +1243,7 @@ def gift_count(post_id):
     })
     
 @app.route("/send_gift", methods=["POST"])
+@csrf.exempt
 @login_required
 def send_gift():
 
@@ -1337,6 +1347,7 @@ def my_gifts():
     ])
 
 @app.route("/check_gift_access", methods=["POST"])
+@csrf.exempt
 @login_required
 def check_gift_access():
 
@@ -1579,7 +1590,7 @@ def user_following(user_id):
 # -------- ADD BUDDY --------
 
 @app.route("/add_buddy", methods=["POST"])
-
+@csrf.exempt
 @login_required
 
 def add_buddy():
@@ -1654,8 +1665,8 @@ def mutual_buddies():
 # -------- CREATE POST --------
 
 # -------- CREATE POST --------
-
 @app.route("/create_post", methods=["POST"])
+@csrf.exempt
 @login_required
 def create_post():
 
@@ -1703,8 +1714,8 @@ def create_post():
 
             # SAVE URL
             media_url = url_for(
-                "uploaded_file",
-                filename=f"posts/{filename}"
+                "uploaded_post_file",
+                filename=filename
             )
 
             mime_type = file.mimetype or ""
@@ -1834,6 +1845,7 @@ def earnings():
 
 # -------- CHAT --------
 @app.route("/send_message", methods=["POST"])
+@csrf.exempt
 @login_required
 def send_message():
 
@@ -1917,6 +1929,7 @@ def user_profile(user_id):
 # -------- CLEAR CHAT --------
 
 @app.route("/clear_chat", methods=["POST"])
+@csrf.exempt
 @login_required
 def clear_chat():
 
@@ -1991,7 +2004,6 @@ def handle_join(data):
 
 
 if __name__ == "__main__":
-    csrf = CSRFProtect(app)
 
     with app.app_context():
         seed_gifts()

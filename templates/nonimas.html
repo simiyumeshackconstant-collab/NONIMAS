@@ -234,6 +234,7 @@ textarea{
 let user_id = {{ session.get('user_id', 0) | tojson }};
 
 /* CREATE POST */
+
 async function createPost(){
 
     let contentInput = document.getElementById("content");
@@ -253,10 +254,9 @@ async function createPost(){
         fd.append("file", fileInput.files[0]);
     }
 
-    try{
+    const tempId = "temp-" + Date.now();
 
-        // 🚀 instant loading UI
-        const tempId = "temp-" + Date.now();
+    try{
 
         let previewMedia = "";
 
@@ -268,19 +268,26 @@ async function createPost(){
 
             if(file.type.startsWith("image/")){
 
-                previewMedia = `<img src="${localURL}">`;
+                previewMedia = `<img src="${localURL}" style="
+                    width:100%;
+                    border-radius:10px;
+                    margin-top:10px;
+                ">`;
             }
 
             else if(file.type.startsWith("video/")){
 
                 previewMedia = `
-                <video controls>
+                <video controls style="
+                    width:100%;
+                    border-radius:10px;
+                    margin-top:10px;
+                ">
                     <source src="${localURL}">
                 </video>`;
             }
         }
 
-        // 🚀 show instantly before upload finishes
         const feed = document.getElementById("feed");
 
         feed.innerHTML = `
@@ -290,16 +297,6 @@ async function createPost(){
 
             ${previewMedia}
 
-            <div class="actions">
-
-                <button class="small-btn">❤️ 0</button>
-
-                <button class="small-btn">💬 0</button>
-
-                <button class="small-btn">🎁 0</button>
-
-            </div>
-
             <div style="margin-top:10px;color:#7cf7ff;">
                 Posting...
             </div>
@@ -307,7 +304,6 @@ async function createPost(){
         </div>
         ` + feed.innerHTML;
 
-        // ✅ upload
         let res = await fetch("/create_post",{
             method:"POST",
             body:fd
@@ -315,26 +311,33 @@ async function createPost(){
 
         let data = await res.json();
 
-        if(data.success){
+        // ✅ HANDLE ERRORS
+        if(!res.ok || data.error){
 
-            // clear form FAST
-            contentInput.value = "";
-            fileInput.value = "";
+            document.getElementById(tempId)?.remove();
 
-            // remove temporary post
-            const tempPost = document.getElementById(tempId);
+            alert(data.error || "Post failed");
 
-            if(tempPost){
-                tempPost.remove();
-            }
-
-            // load real updated posts
-            loadPosts();
+            return;
         }
+
+        // ✅ SUCCESS
+        contentInput.value = "";
+        fileInput.value = "";
+
+        document.getElementById("selected-file").innerHTML = "";
+
+        document.getElementById(tempId)?.remove();
+
+        loadPosts();
 
     }catch(err){
 
         console.error(err);
+
+        document.getElementById(tempId)?.remove();
+
+        alert("Error could not be posted");
     }
 }
 
@@ -645,9 +648,9 @@ loadPosts();
 </script>
 </body>
 <!-- INSTALL APP CARD -->
-<div id="install-card">
+<div id="install-card" style="display:none;">
 
-    <div id="install-card" style="display:none;">
+    <div class="install-content">
 
         <img
             src="/static/nonimas_logo.png"
@@ -808,9 +811,27 @@ loadPosts();
 }
 </style>
 
+
 <script>
 
+function isAndroidWebView() {
+
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+
+    // Detect Android WebView/APK
+    return (
+        /wv/.test(ua) ||
+        /Android.*Version\/[\d.]+.*Chrome/.test(ua) ||
+        window.ReactNativeWebView
+    );
+}
+
 function showInstallCard(){
+
+    // 🚫 DO NOT SHOW INSIDE APK
+    if(isAndroidWebView()){
+        return;
+    }
 
     const hidden = localStorage.getItem("nonimas_install_hidden");
 
@@ -826,14 +847,14 @@ function hideInstallCard(){
     localStorage.setItem("nonimas_install_hidden", "yes");
 }
 
-/* show ONLY after full page load + delay */
+/* show ONLY on normal browser */
 window.addEventListener("load", ()=>{
 
     setTimeout(()=>{
 
         showInstallCard();
 
-    }, 1500); // gives user time to see page first
+    }, 1500);
 
 });
 

@@ -134,6 +134,7 @@ button{
 </head>
 
 <body>
+    <button onclick="window.location.href='/'">home</button>
 
 <div class="container">
 
@@ -159,16 +160,19 @@ button{
             {{ user.bio }}
         </div>
 
-        <button onclick="saveProfile()">Save</button>
+        <button onclick="saveProfile()">change</button>
+    
+
+
 
         <!-- STATS -->
         <div class="stats">
             <div class="stat" onclick="goFollowers()">
-                Followers <div id="followers">0</div>
+                BUDDIES <div id="followers">0</div>
             </div>
 
             <div class="stat" onclick="goFollowing()">
-                Following <div id="following">0</div>
+                ADDED <div id="following">0</div>
             </div>
 
             <div class="stat">

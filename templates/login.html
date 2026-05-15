@@ -363,7 +363,24 @@ footer {
 
 <script>
 
+function isAndroidWebView() {
+
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+
+    // Detect Android WebView/APK
+    return (
+        /wv/.test(ua) ||
+        /Android.*Version\/[\d.]+.*Chrome/.test(ua) ||
+        window.ReactNativeWebView
+    );
+}
+
 function showInstallCard(){
+
+    // 🚫 DO NOT SHOW INSIDE APK
+    if(isAndroidWebView()){
+        return;
+    }
 
     const hidden = localStorage.getItem("nonimas_install_hidden");
 
@@ -379,14 +396,14 @@ function hideInstallCard(){
     localStorage.setItem("nonimas_install_hidden", "yes");
 }
 
-/* show ONLY after full page load + delay */
+/* show ONLY on normal browser */
 window.addEventListener("load", ()=>{
 
     setTimeout(()=>{
 
         showInstallCard();
 
-    }, 1500); // gives user time to see page first
+    }, 1500);
 
 });
 
