@@ -29,23 +29,23 @@ import random
 import string
 import uuid
 import smtplib
+from flask_wtf.csrf import CSRFProtect
 
 from email.mime.text import MIMEText
 
 # ----------------- App Setup --------------
-from flask import Flask
 
 app = Flask(__name__)
 
 # THEN initialize socketio AFTER app exists
-from flask_socketio import SocketIO
-
+from flask_socketio import SocketIO, join_room, leave_room, emit
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode="threading"  # SAFE for local + Render
+    async_mode="threading",
+    manage_session=False
 )
-from flask_socketio import SocketIO, join_room, leave_room, emit
+
 
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
 
@@ -109,7 +109,7 @@ ALLOWED_EXTENSIONS = {
     "mp4",
     "mov",
     "pdf",
-    "docx"
+    "docx",
     "apk"
 }
 
@@ -570,9 +570,7 @@ def get_comments(post_id):
 
     return jsonify(result) 
 @app.route("/chat_page")
-
 @login_required
-
 def chat_page():
 
     return render_template("chat.html")
@@ -742,16 +740,11 @@ def admin_dashboard():
     total_comments = Comment.query.count()
 
     # ❤️ TOTAL LIKES
-    total_likes = Like.query.filter_by(is_active=True).count()
+    total_likes = Like.query.count()
 
     # 🎁 TOTAL GIFTS SENT
     total_gifts = db.session.query(
         db.func.sum(GiftTransaction.quantity)
-    ).scalar() or 0
-
-    # 💵 TOTAL WALLET MONEY
-    total_wallet = db.session.query(
-        db.func.sum(Wallet.balance)
     ).scalar() or 0
 
     # 🎁 MOST POPULAR GIFTS
@@ -783,7 +776,7 @@ def admin_dashboard():
     # 🕒 RECENT USERS
     recent_users = User.query.order_by(
         User.timestamp.desc()
-    ).limit(10).all()
+    ).all()
 
     # 🕒 RECENT POSTS
     recent_posts = Post.query.order_by(
@@ -1714,24 +1707,34 @@ def get_posts():
     return jsonify(result)
 
 # -------- WALLET API --------
-
 @app.route("/wallet/<int:user_id>")
-
+@login_required
 def wallet(user_id):
+
+    current_user = session["user_id"]
+    is_admin = session.get("is_admin", False)
+
+    # SECURITY CHECK
+    if current_user != user_id and not is_admin:
+        return jsonify({"error": "Unauthorized"}), 403
 
     wallet = Wallet.query.filter_by(user_id=user_id).first()
 
-
+    # create wallet only for valid authenticated owner
     if not wallet:
 
-        wallet = Wallet(user_id=user_id, balance=0)
+        wallet = Wallet(
+            user_id=user_id,
+            balance=0
+        )
 
         db.session.add(wallet)
-
         db.session.commit()
 
+    return jsonify({
+        "balance": wallet.balance
+    })
 
-    return jsonify({"balance": wallet.balance})
 @app.route("/wallet_page")
 @login_required
 def wallet_page():
@@ -1775,27 +1778,44 @@ def send_message():
     db.session.commit()
 
     return jsonify({"success": True})
+
 @app.route("/get_messages/<int:user1>/<int:user2>")
 @login_required
 def get_messages(user1, user2):
 
+    current_user = session["user_id"]
+
+    # SECURITY CHECK
+    if current_user not in [user1, user2]:
+        return jsonify({"error": "Unauthorized"}), 403
+
     messages = ChatMessage.query.filter(
-        ((ChatMessage.sender_id == user1) & (ChatMessage.receiver_id == user2)) |
-        ((ChatMessage.sender_id == user2) & (ChatMessage.receiver_id == user1))
+        (
+            (ChatMessage.sender_id == user1) &
+            (ChatMessage.receiver_id == user2)
+        ) |
+        (
+            (ChatMessage.sender_id == user2) &
+            (ChatMessage.receiver_id == user1)
+        )
     ).order_by(ChatMessage.created_at.asc()).all()
 
-    # ✅ MARK AS READ
+    # mark messages as read ONLY for current user
     for m in messages:
-        if m.receiver_id == user1:
+
+        if m.receiver_id == current_user:
             m.is_read = True
 
     db.session.commit()
 
-    return jsonify([{
-        "sender": m.sender_id,
-        "message": m.message
-    } for m in messages])
-
+    return jsonify([
+        {
+            "sender": m.sender_id,
+            "message": m.message,
+            "created_at": m.created_at.strftime("%Y-%m-%d %H:%M")
+        }
+        for m in messages
+    ])
 
 @app.route("/user/<int:user_id>")
 @login_required
@@ -1824,22 +1844,31 @@ def user_profile(user_id):
 # -------- CLEAR CHAT --------
 
 @app.route("/clear_chat", methods=["POST"])
-
+@login_required
 def clear_chat():
 
     data = request.json
 
+    current_user = session["user_id"]
 
+    other_user = int(data.get("other_user"))
+
+    # delete ONLY chats belonging to logged-in user
     ChatMessage.query.filter(
 
-        ((ChatMessage.sender_id == data["user1"]) & (ChatMessage.receiver_id == data["user2"])) |
+        (
+            (ChatMessage.sender_id == current_user) &
+            (ChatMessage.receiver_id == other_user)
+        ) |
 
-        ((ChatMessage.sender_id == data["user2"]) & (ChatMessage.receiver_id == data["user1"]))
+        (
+            (ChatMessage.sender_id == other_user) &
+            (ChatMessage.receiver_id == current_user)
+        )
+
     ).delete()
 
-
     db.session.commit()
-
 
     return jsonify({"success": True})
 
@@ -1876,8 +1905,15 @@ def unread_counts():
 
 @socketio.on("join")
 def handle_join(data):
-    user_id = data["user_id"]
-    join_room(str(user_id))
+
+    # get REAL logged-in user from Flask session
+    current_user = session.get("user_id")
+
+    if not current_user:
+        return
+
+    # ONLY join own room
+    join_room(str(current_user))
 # ---------------- RUN ----------------
 
 
