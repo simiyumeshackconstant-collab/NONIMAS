@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 <meta charset="UTF-8">
 <title>Profile</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,6 +13,23 @@ body{
     font-family:Arial;
     background:#0b0018;
     color:white;
+}
+
+/* BACK BUTTON */
+.back-wrap{
+    position:fixed;
+    top:15px;
+    left:15px;
+    z-index:9999;
+}
+
+.back-btn{
+    background:#12002b;
+    color:white;
+    border:1px solid #2de2e6;
+    padding:10px 14px;
+    border-radius:12px;
+    cursor:pointer;
 }
 
 /* MAIN WRAPPER */
@@ -48,7 +66,9 @@ body{
     background:#000;
 }
 
-#fileInput{ display:none; }
+#fileInput{
+    display:none;
+}
 
 /* NAME */
 .name{
@@ -120,21 +140,27 @@ body{
     background:#12002b;
 }
 
-button{
+.save-btn{
     background:#2de2e6;
     border:none;
-    padding:8px 12px;
+    padding:10px 14px;
     border-radius:8px;
     cursor:pointer;
     margin-left:150px;
     margin-top:10px;
+    font-weight:bold;
 }
 
 </style>
 </head>
 
 <body>
-    <button onclick="window.location.href='/'">home</button>
+
+<div class="back-wrap">
+    <button class="back-btn" onclick="goBack()">
+        ← Back
+    </button>
+</div>
 
 <div class="container">
 
@@ -145,8 +171,8 @@ button{
         <!-- AVATAR -->
         <img id="avatar"
              class="avatar"
-             src="/uploads/user_dp/{{ user.user_dp_pic }}"
-             onerror="this.src='/uploads/user_dp/default_avatar.png'">
+             src="/uploads/user_dp_pics/{{ user.user_dp_pic or 'default_avatar.png' }}"
+             onerror="this.src='/uploads/user_dp_pics/default_avatar.png'">
 
         <input type="file" id="fileInput" accept="image/*">
 
@@ -160,30 +186,41 @@ button{
             {{ user.bio }}
         </div>
 
-        <button onclick="saveProfile()">change</button>
-    
-
-
+        <button class="save-btn" onclick="saveProfile()">
+            Save Profile
+        </button>
 
         <!-- STATS -->
         <div class="stats">
+
             <div class="stat" onclick="goFollowers()">
-                BUDDIES <div id="followers">0</div>
+                BUDDIES
+                <div id="followers">0</div>
             </div>
 
             <div class="stat" onclick="goFollowing()">
-                ADDED <div id="following">0</div>
+                ADDED
+                <div id="following">0</div>
             </div>
 
             <div class="stat">
-                Posts <div id="postCount">0</div>
+                Posts
+                <div id="postCount">0</div>
             </div>
+
         </div>
 
         <!-- TABS -->
         <div class="tabs">
-            <div class="tab active" onclick="showTab('posts')">Posts</div>
-            <div class="tab" onclick="showTab('about')">About</div>
+
+            <div class="tab active" onclick="showTab('posts')">
+                Posts
+            </div>
+
+            <div class="tab" onclick="showTab('about')">
+                About
+            </div>
+
         </div>
 
     </div>
@@ -193,7 +230,10 @@ button{
 
     <!-- ABOUT -->
     <div class="about" id="about">
-        <p>Bio: <span id="aboutBio"></span></p>
+        <p>
+            Bio:
+            <span id="aboutBio"></span>
+        </p>
     </div>
 
 </div>
@@ -202,103 +242,227 @@ button{
 
 const userId = "{{ session.get('user_id') }}";
 
+/* ---------------- BACK ---------------- */
+
+function goBack(){
+
+    if(window.history.length > 1){
+        window.history.back();
+    }else{
+        window.location.href = "/";
+    }
+}
+
 /* ---------------- AVATAR CLICK ---------------- */
+
 document.getElementById("avatar").onclick = () => {
+
     document.getElementById("fileInput").click();
 };
 
 /* ---------------- LIVE IMAGE PREVIEW + UPLOAD ---------------- */
+
 document.getElementById("fileInput").onchange = function(){
 
     let file = this.files[0];
+
     if(!file) return;
 
+    // preview
+
     let reader = new FileReader();
+
     reader.onload = e => {
+
         document.getElementById("avatar").src = e.target.result;
     };
+
     reader.readAsDataURL(file);
 
+    // upload
+
     let form = new FormData();
+
     form.append("user_dp_pic", file);
 
-    fetch("/dp", { method:"POST", body:form })
-    .then(loadProfile);
+    fetch("/dp", {
+        method:"POST",
+        body:form
+    })
+    .then(res => {
+
+        if(!res.ok){
+            throw new Error("Upload failed");
+        }
+
+        return res.text();
+    })
+    .then(() => {
+
+        loadProfile();
+
+        alert("Profile picture updated");
+
+    })
+    .catch(err => {
+
+        console.error(err);
+
+        alert("Could not upload image");
+    });
 };
 
 /* ---------------- SAVE NAME + BIO ---------------- */
+
 function saveProfile(){
 
     let form = new FormData();
-    form.append("full_name", document.getElementById("name").innerText);
-    form.append("bio", document.getElementById("bio").innerText);
 
-    fetch("/dp", { method:"POST", body:form })
-    .then(loadProfile);
+    form.append(
+        "full_name",
+        document.getElementById("name").innerText.trim()
+    );
+
+    form.append(
+        "bio",
+        document.getElementById("bio").innerText.trim()
+    );
+
+    fetch("/dp", {
+        method:"POST",
+        body:form
+    })
+    .then(res => {
+
+        if(!res.ok){
+            throw new Error("Save failed");
+        }
+
+        return res.text();
+    })
+    .then(() => {
+
+        loadProfile();
+
+        alert("Profile updated");
+
+    })
+    .catch(err => {
+
+        console.error(err);
+
+        alert("Could not save profile");
+    });
 }
 
 /* ---------------- LOAD POSTS ---------------- */
+
 function loadPosts(){
 
     fetch("/my_posts")
-    .then(r=>r.json())
-    .then(data=>{
+    .then(r => r.json())
+    .then(data => {
 
         document.getElementById("posts").innerHTML =
-        data.map(p=>`
+
+        data.map(p => `
+
             <div class="post">
+
                 <div>${p.content || ""}</div>
-                ${p.media ? `<img src="${p.media}" style="width:100%;margin-top:10px;border-radius:10px;">` : ""}
+
+                ${p.media ?
+
+                `<img src="${p.media}"
+                    style="
+                        width:100%;
+                        margin-top:10px;
+                        border-radius:10px;
+                    ">`
+
+                : ""}
+
             </div>
+
         `).join("");
 
     });
 }
 
 /* ---------------- LOAD STATS ---------------- */
+
 function loadStats(){
 
     fetch(`/user_stats/${userId}`)
-    .then(r=>r.json())
-    .then(d=>{
+    .then(r => r.json())
+    .then(d => {
 
-        document.getElementById("followers").innerText = d.followers;
-        document.getElementById("following").innerText = d.following;
-        document.getElementById("postCount").innerText = d.posts;
+        document.getElementById("followers").innerText =
+            d.followers;
+
+        document.getElementById("following").innerText =
+            d.following;
+
+        document.getElementById("postCount").innerText =
+            d.posts;
 
     });
-
 }
 
 /* ---------------- TABS ---------------- */
+
 function showTab(tab){
 
-    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    document
+        .querySelectorAll(".tab")
+        .forEach(t => t.classList.remove("active"));
 
     if(tab === "posts"){
-        document.getElementById("posts").style.display = "block";
-        document.getElementById("about").style.display = "none";
-        document.querySelectorAll(".tab")[0].classList.add("active");
-    } else {
-        document.getElementById("posts").style.display = "none";
-        document.getElementById("about").style.display = "block";
-        document.querySelectorAll(".tab")[1].classList.add("active");
-    }
 
+        document.getElementById("posts").style.display =
+            "block";
+
+        document.getElementById("about").style.display =
+            "none";
+
+        document
+            .querySelectorAll(".tab")[0]
+            .classList.add("active");
+
+    }else{
+
+        document.getElementById("posts").style.display =
+            "none";
+
+        document.getElementById("about").style.display =
+            "block";
+
+        document
+            .querySelectorAll(".tab")[1]
+            .classList.add("active");
+    }
 }
 
 /* ---------------- NAV ---------------- */
+
 function goFollowers(){
-    window.location.href = `/followers/${userId}`;
+
+    window.location.href =
+        `/followers/${userId}`;
 }
 
 function goFollowing(){
-    window.location.href = `/following/${userId}`;
+
+    window.location.href =
+        `/following/${userId}`;
 }
 
 /* ---------------- INIT ---------------- */
+
 function loadProfile(){
+
     loadPosts();
+
     loadStats();
 
     document.getElementById("aboutBio").innerText =

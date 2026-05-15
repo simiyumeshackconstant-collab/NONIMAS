@@ -1471,7 +1471,7 @@ def user_stats(user_id):
     })
 
 @app.route("/dp", methods=['GET', 'POST'])
-
+@csrf.exempt
 @login_required
 
 def dp():
