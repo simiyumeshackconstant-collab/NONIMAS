@@ -47,7 +47,10 @@ socketio = SocketIO(
 )
 
 
-app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
+app.secret_key = os.environ.get("SECRET_KEY")
+
+if not app.secret_key:
+    raise ValueError("SECRET_KEY environment variable is required")
 
 app.config["APP_NAME"] = "SPACE LIO AI"
 
@@ -1918,6 +1921,7 @@ def handle_join(data):
 
 
 if __name__ == "__main__":
+    csrf = CSRFProtect(app)
 
     with app.app_context():
         seed_gifts()
