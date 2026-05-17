@@ -86,9 +86,9 @@ body{
 <div class="container">
 
 {% if users %}
-{% for u in users %} <div class="user-card" onclick="openProfile('{{ u.id }}')"> <img src="/uploads/user_dp/{{ u.user_dp_pic }}" 
+{% for u in users %} <div class="user-card" onclick="openProfile('{{ u.id }}')"> <img src="/uploads/user_dp_pics/{{ u.user_dp_pic }}" 
               class="avatar"
-              onerror="this.src='/uploads/default_avatar.jpeg'">
+              onerror="this.src='/uploads/user_dp_pics/default_avatar.jpeg'">
 
 
         <div>

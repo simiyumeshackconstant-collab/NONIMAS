@@ -1,282 +1,573 @@
 <!DOCTYPE html>
-
-<html>
+<html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>User Profile</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>{{ user.full_name }}</title>
 
 <style>
-body{
-    background:#0b0018;
-    color:white;
-    font-family:Arial;
+
+*{
     margin:0;
+    padding:0;
+    box-sizing:border-box;
 }
 
-/* HEADER */
-.header{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    padding:10px 20px;
-    background:#12002b;
-    border-bottom:1px solid #2de2e6;
-}
-
-.logo{
-    color:#7cf7ff;
-    font-size:18px;
-}
-
-.top-btn{
-    background:#1f0045;
-    border:none;
+body{
+    background:#0f0f10;
     color:white;
-    padding:8px 12px;
-    border-radius:8px;
+    font-family:Arial,sans-serif;
+}
+
+/* COVER */
+
+.cover{
+    height:170px;
+
+    background:
+    linear-gradient(
+        135deg,
+        #2de2e6,
+        #5b00ff,
+        #12002b
+    );
+
+    border-bottom-left-radius:25px;
+    border-bottom-right-radius:25px;
+
+    position:relative;
+}
+
+/* BACK BUTTON */
+
+.back-btn{
+    position:absolute;
+    top:15px;
+    left:15px;
+
+    border:none;
+
+    background:rgba(0,0,0,.4);
+
+    color:white;
+
+    padding:10px 15px;
+
+    border-radius:12px;
+
     cursor:pointer;
 }
 
-/* CONTAINER */
-.container{
-    padding:20px;
-    max-width:600px;
+/* MAIN */
+
+.wrapper{
+    max-width:850px;
     margin:auto;
+
+    padding:0 15px 30px;
 }
 
 /* PROFILE CARD */
+
 .profile-card{
-    background:#140030;
-    border:1px solid #2de2e6;
-    border-radius:15px;
+    background:#18191a;
+
+    border-radius:22px;
+
+    margin-top:-55px;
+
+    position:relative;
+
+    z-index:10;
+
     padding:20px;
-    text-align:center;
+
+    box-shadow:
+    0 5px 25px rgba(0,0,0,.4);
+
+    border:1px solid #2a2a2a;
 }
 
-/* PROFILE IMAGE */
+/* PROFILE TOP */
+
+.profile-top{
+    display:flex;
+    align-items:flex-start;
+    gap:20px;
+}
+
+/* PROFILE PIC */
+
 .avatar{
-    width:90px;
-    height:90px;
+    width:125px;
+    height:125px;
+
     border-radius:50%;
+
     object-fit:cover;
-    border:2px solid #2de2e6;
-    margin-bottom:10px;
+
+    border:5px solid #18191a;
+
+    background:black;
+
+    flex-shrink:0;
+
+    margin-top:-70px;
+}
+
+/* INFO */
+
+.profile-info{
+    flex:1;
 }
 
 /* NAME */
+
 .name{
-    font-size:18px;
-    color:#7cf7ff;
+    font-size:30px;
+    font-weight:bold;
 }
 
-/* STATUS */
-.status{
-    font-size:13px;
-    color:#aaa;
-    margin-top:5px;
+/* BIO */
+
+.bio{
+    color:#b0b3b8;
+
+    margin-top:8px;
+
+    line-height:1.6;
 }
 
-/* CLICKABLE STATS */
-.stat{
-    cursor:pointer;
-    display:inline-block;
-    margin:0 10px;
-}
+/* COUNTS */
 
-.stat:hover{
-    color:#2de2e6;
-}
-
-/* BUTTONS */
-.actions{
-    margin-top:15px;
+.counts{
     display:flex;
-    gap:10px;
-    justify-content:center;
+
+    gap:25px;
+
+    margin-top:18px;
+
+    flex-wrap:wrap;
+}
+
+.count{
+    font-size:15px;
+    color:#b0b3b8;
+}
+
+.count b{
+    color:white;
+    font-size:18px;
+}
+
+/* ACTIONS */
+
+.actions{
+    display:flex;
+
+    gap:12px;
+
+    margin-top:20px;
+
+    flex-wrap:wrap;
 }
 
 .btn{
-    padding:8px 12px;
     border:none;
-    border-radius:8px;
-    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
-    color:white;
+
+    padding:12px 18px;
+
+    border-radius:10px;
+
+    font-weight:bold;
+
     cursor:pointer;
-    font-size:13px;
+
+    font-size:14px;
+}
+
+.primary-btn{
+    background:#2374e1;
+    color:white;
+}
+
+.gray-btn{
+    background:#3a3b3c;
+    color:white;
 }
 
 /* POSTS */
+
 .posts{
     margin-top:20px;
 }
 
-.post{
-    background:#140030;
-    border:1px solid #2de2e6;
-    border-radius:12px;
-    padding:12px;
-    margin-top:10px;
-}
-</style>
+/* POST */
 
+.post{
+    background:#18191a;
+
+    border-radius:18px;
+
+    padding:16px;
+
+    margin-bottom:20px;
+
+    border:1px solid #2a2a2a;
+}
+
+/* POST HEADER */
+
+.post-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.post-name{
+    font-size:16px;
+    font-weight:bold;
+}
+
+.post-time{
+    color:#b0b3b8;
+    font-size:13px;
+}
+
+/* POST CONTENT */
+
+.post-content{
+    margin-top:15px;
+
+    line-height:1.7;
+
+    word-break:break-word;
+}
+
+/* MEDIA */
+
+.post img,
+.post video{
+    width:100%;
+
+    margin-top:15px;
+
+    border-radius:15px;
+
+    max-height:600px;
+
+    object-fit:cover;
+
+    background:black;
+}
+
+/* EMPTY */
+
+.empty{
+    background:#18191a;
+
+    padding:30px;
+
+    border-radius:18px;
+
+    text-align:center;
+
+    color:#b0b3b8;
+
+    border:1px solid #2a2a2a;
+}
+
+/* MOBILE */
+
+@media(max-width:700px){
+
+    .profile-top{
+        flex-direction:column;
+        align-items:center;
+        text-align:center;
+    }
+
+    .avatar{
+        margin-top:-90px;
+    }
+
+    .name{
+        font-size:25px;
+    }
+
+    .counts{
+        justify-content:center;
+    }
+
+    .actions{
+        justify-content:center;
+    }
+
+    .btn{
+        width:100%;
+    }
+
+}
+
+</style>
 </head>
 
 <body>
 
-<!-- HEADER -->
+<!-- COVER -->
+<div class="cover">
 
-<div class="header">
-    <button class="top-btn" onclick="history.back()">⬅ Back</button>
-    <div class="logo">👤 Profile</div>
-    <button class="top-btn" onclick="location.href='/'">🏠 Feed</button>
-</div>
-
-<div class="container">
-
-```
-<!-- PROFILE -->
-<div class="profile-card">
-
-    <img 
-        src="/uploads/user_dp/{{ user.user_dp_pic }}" 
-        class="avatar"
-        onerror="this.src='/uploads/default_avatar.jpeg'"
+    <button
+        class="back-btn"
+        onclick="history.back()"
     >
-
-    <div class="name">{{ user.full_name }}</div>
-
-    <!-- FOLLOWERS / FOLLOWING -->
-    <div class="status">
-        <span class="stat" onclick="viewFollowers()">
-            <h3 id="followers_count">{{ followers_count }} BUDDIES</h3>
-        </span>
-
-        <span class="stat" onclick="viewFollowing()">
-            <h3 id="following_count">{{ following_count }} ADDED</h3>
-        </span>
-    </div>
-
-    <!-- BIO -->
-    <div class="post">{{ user.bio }}</div>
-
-    <!-- RELATION STATUS -->
-    <div class="status">
-        {% if is_mutual %}
-           🤝 Buddy
-        {% elif added_me %}
-           👤 Add Back
-        {% elif i_added %}
-            ➕ You Added
-        {% else %}
-            🌍 Not Connected
-        {% endif %}
-    </div>
-
-    <!-- ACTION BUTTONS -->
-    <div class="actions">
-
-        {% if not i_added %}
-            <button class="btn" onclick="addBuddy('{{ user.id }}')">
-                ➕ Add Buddy
-            </button>
-        {% endif %}
-
-        <button class="btn" onclick="openChat('{{ user.id }}')">
-            💬 Message
-        </button>
-
-    </div>
+        ← Back
+    </button>
 
 </div>
 
-<!-- POSTS -->
-<div class="posts">
-    <h3 style="color:#7cf7ff;">Posts</h3>
-    <div id="user_posts"></div>
-</div>
-```
+<div class="wrapper">
+
+    <!-- PROFILE CARD -->
+    <div class="profile-card">
+
+        <div class="profile-top">
+
+            <!-- PROFILE PIC -->
+            <img
+                class="avatar"
+                src="/uploads/user_dp_pics/{{ user.user_dp_pic or 'default_avatar.png' }}"
+                onerror="this.src='/uploads/user_dp_pics/default_avatar.png'"
+            >
+
+            <!-- INFO -->
+            <div class="profile-info">
+
+                <div class="name">
+                    {{ user.full_name }}
+                </div>
+
+                <div class="bio">
+                    {{ user.bio or "No bio yet." }}
+                </div>
+
+                <!-- COUNTS -->
+                <div class="counts">
+
+                    <div class="count">
+                        <b>{{ followers_count }}</b>
+                        Buddies
+                    </div>
+
+                    <div class="count">
+                        <b>{{ following_count }}</b>
+                        Added
+                    </div>
+
+                    <div class="count">
+                        <b id="postCount">0</b>
+                        Posts
+                    </div>
+
+                </div>
+
+                <!-- ACTIONS -->
+                {% if user.id != session.get("user_id") %}
+
+                <div class="actions">
+
+                    {% if is_mutual %}
+
+                        <button class="btn gray-btn">
+                            ✓ Buddies
+                        </button>
+
+                    {% elif i_added %}
+
+                        <button class="btn gray-btn">
+                            ✓ Added
+                        </button>
+
+                    {% elif added_me %}
+
+                        <button
+                            class="btn primary-btn"
+                            onclick="addBuddy({{ user.id }})"
+                        >
+                            Add Buddy Back
+                        </button>
+
+                    {% else %}
+
+                        <button
+                            class="btn primary-btn"
+                            onclick="addBuddy({{ user.id }})"
+                        >
+                            Add Buddy
+                        </button>
+
+                    {% endif %}
+
+                    <button
+                        class="btn gray-btn"
+                        onclick="openChat({{ user.id }})"
+                    >
+                        Message
+                    </button>
+
+                </div>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- POSTS -->
+    <div
+        class="posts"
+        id="posts"
+    ></div>
 
 </div>
 
 <script>
 
-let profile_user_id = "{{ user.id }}";
-let current_user_id = "{{ session.get('user_id', '') }}";
-
-/* NAVIGATION */
-function viewFollowers(){
-    window.location.href = "/followers/" + profile_user_id;
-}
-
-function viewFollowing(){
-    window.location.href = "/following/" + profile_user_id;
-}
-
-/* ADD BUDDY */
-function addBuddy(id){
-    fetch("/add_buddy",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({buddy_id:id})
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.success){
-            location.reload();
-        } else {
-            alert(data.error || "Failed to add buddy");
-        }
-    })
-    .catch(err => {
-        console.error(err);
-        alert("Network error");
-    });
-}
-
-/* CHAT */
-function openChat(id){
-    window.location.href = "/chat_page?user=" + id;
-}
+const profileUserId = Number("{{ user.id }}");
 
 /* LOAD POSTS */
+
 function loadPosts(){
-    fetch(`/posts/${profile_user_id}`)
-    .then(res => res.json())
-    .then(data => {
 
-        let container = document.getElementById("user_posts");
-        container.innerHTML = "";
+    fetch("/posts")
+    .then(r => r.json())
+    .then(posts => {
 
-        if(!data || data.length === 0){
-            container.innerHTML = "<p style='color:#777'>No posts yet</p>";
+        const userPosts = posts.filter(
+            p => Number(p.user) === profileUserId
+        );
+
+        document.getElementById("postCount").innerText =
+            userPosts.length;
+
+        if(userPosts.length === 0){
+
+            document.getElementById("posts").innerHTML =
+
+            `
+            <div class="empty">
+                No posts yet.
+            </div>
+            `;
+
             return;
         }
 
-        data.forEach(p => {
+        document.getElementById("posts").innerHTML =
 
-            let media = "";
+        userPosts.map(p => `
 
-            if(p.media){
-                if(p.type === "image"){
-                    media = `<img src="${p.media}" style="width:100%;border-radius:10px;">`;
-                } else if(p.type === "video"){
-                    media = `<video src="${p.media}" controls style="width:100%"></video>`;
-                }
-            }
+            <div class="post">
 
-            container.innerHTML += `
-                <div class="post">
-                    <p>${p.content || ""}</p>
-                    ${media}
+                <div class="post-header">
+
+                    <div class="post-name">
+                        {{ user.full_name }}
+                    </div>
+
+                    <div class="post-time">
+                        Post
+                    </div>
+
                 </div>
-            `;
-        });
+
+                ${
+                    p.content ?
+
+                    `
+                    <div class="post-content">
+                        ${p.content}
+                    </div>
+                    `
+
+                    : ""
+                }
+
+                ${
+                    p.media ?
+
+                    p.type === "video"
+
+                    ?
+
+                    `
+                    <video controls>
+                        <source src="${p.media}">
+                    </video>
+                    `
+
+                    :
+
+                    `
+                    <img src="${p.media}">
+                    `
+
+                    : ""
+                }
+
+            </div>
+
+        `).join("");
+
+    });
+
+}
+
+/* ADD BUDDY */
+
+function addBuddy(id){
+
+    fetch("/add_buddy",{
+
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/json"
+        },
+
+        body:JSON.stringify({
+            buddy_id:id
+        })
 
     })
-    .catch(err => {
-        console.error("Post load error:", err);
+    .then(r => r.json())
+    .then(d => {
+
+        if(d.success){
+
+            location.reload();
+
+        }else{
+
+            alert(d.error || "Failed");
+        }
+
     });
+
 }
+
+/* CHAT */
+
+function openChat(id){
+
+    window.location.href =
+        `/chat_page?user=${id}`;
+}
+
+/* INIT */
 
 loadPosts();
 

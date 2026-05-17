@@ -1,82 +1,293 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>My Profile</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Chats</title>
 
 <style>
 
-body{
+*{
     margin:0;
-    font-family:Arial;
-    background:#0b0018;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    background:#0b141a;
+    font-family:Arial,sans-serif;
+    overflow:hidden;
     color:white;
+}
+
+/* MAIN */
+
+.chat-app{
     display:flex;
-    justify-content:center;
-    align-items:center;
     height:100vh;
-}
-
-.container{
-    width:90%;
-    max-width:400px;
-    background:#12002b;
-    padding:20px;
-    border-radius:15px;
-    border:1px solid #2de2e6;
-    text-align:center;
-}
-
-h2{
-    color:#7cf7ff;
-    margin-bottom:20px;
-}
-
-img{
-    width:120px;
-    height:120px;
-    border-radius:50%;
-    border:3px solid #2de2e6;
-    object-fit:cover;
-    margin-bottom:15px;
-}
-
-input, textarea{
     width:100%;
-    padding:10px;
-    margin-top:10px;
-    border:none;
-    border-radius:10px;
-    background:#1f0045;
-    color:white;
 }
 
-textarea{
-    resize:none;
-    height:80px;
+/* SIDEBAR */
+
+.sidebar{
+    width:360px;
+    background:#111b21;
+    border-right:1px solid #222d34;
+    display:flex;
+    flex-direction:column;
 }
 
-button{
-    width:100%;
-    margin-top:15px;
-    padding:12px;
-    border:none;
-    border-radius:25px;
-    background:#2de2e6;
-    color:black;
-    cursor:pointer;
+/* TOP */
+
+.sidebar-top{
+    padding:15px;
+    background:#202c33;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.sidebar-title{
+    font-size:22px;
     font-weight:bold;
 }
 
-button:hover{
-    opacity:0.9;
+/* SEARCH */
+
+.search-wrap{
+    padding:10px;
+    background:#111b21;
 }
 
-.flash{
-    margin-bottom:10px;
-    color:#7cf7ff;
-    font-size:14px;
+.search{
+    width:100%;
+    padding:12px;
+    border:none;
+    outline:none;
+    border-radius:10px;
+    background:#202c33;
+    color:white;
+}
+
+/* USERS */
+
+.users{
+    flex:1;
+    overflow-y:auto;
+}
+
+/* USER */
+
+.user{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:14px;
+    cursor:pointer;
+    border-bottom:1px solid #1f2c34;
+    transition:.2s;
+    position:relative;
+}
+
+.user:hover{
+    background:#202c33;
+}
+
+.user.active{
+    background:#2a3942;
+}
+
+/* USER PIC */
+
+.user img{
+    width:55px;
+    height:55px;
+    border-radius:50%;
+    object-fit:cover;
+    background:black;
+}
+
+/* USER INFO */
+
+.user-info{
+    flex:1;
+    min-width:0;
+}
+
+.user-name{
+    font-size:16px;
+    font-weight:bold;
+}
+
+.last-msg{
+    color:#8696a0;
+    font-size:13px;
+    margin-top:4px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+/* BADGE */
+
+.badge{
+    background:#00a884;
+    color:white;
+    min-width:24px;
+    height:24px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:12px;
+    font-weight:bold;
+    padding:4px;
+}
+
+/* CHAT AREA */
+
+.chat-area{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    background:#0b141a;
+}
+
+/* CHAT HEADER */
+
+.chat-header{
+    height:70px;
+    background:#202c33;
+    border-bottom:1px solid #222d34;
+    display:flex;
+    align-items:center;
+    padding:0 15px;
+    gap:12px;
+}
+
+.chat-header img{
+    width:45px;
+    height:45px;
+    border-radius:50%;
+    object-fit:cover;
+}
+
+.chat-name{
+    font-size:18px;
+    font-weight:bold;
+}
+
+/* MESSAGES */
+
+.messages{
+    flex:1;
+    overflow-y:auto;
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+/* MESSAGE */
+
+.msg{
+    max-width:75%;
+    padding:10px 14px;
+    border-radius:12px;
+    word-break:break-word;
+    line-height:1.5;
+    position:relative;
+}
+
+.me{
+    align-self:flex-end;
+    background:#005c4b;
+    border-bottom-right-radius:3px;
+}
+
+.other{
+    align-self:flex-start;
+    background:#202c33;
+    border-bottom-left-radius:3px;
+}
+
+.msg-time{
+    font-size:11px;
+    opacity:.7;
+    margin-top:5px;
+    text-align:right;
+}
+
+/* INPUT AREA */
+
+.chat-input-wrap{
+    background:#202c33;
+    padding:10px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+
+/* INPUT */
+
+.chat-input{
+    flex:1;
+    padding:14px;
+    border:none;
+    outline:none;
+    border-radius:10px;
+    background:#2a3942;
+    color:white;
+    font-size:15px;
+}
+
+/* SEND */
+
+.send-btn{
+    border:none;
+    background:#00a884;
+    color:white;
+    width:52px;
+    height:52px;
+    border-radius:50%;
+    cursor:pointer;
+    font-size:20px;
+    font-weight:bold;
+}
+
+/* EMPTY */
+
+.empty{
+    flex:1;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    color:#8696a0;
+    font-size:20px;
+}
+
+/* MOBILE */
+
+@media(max-width:850px){
+
+    .sidebar{
+        width:100%;
+    }
+
+    .chat-area{
+        display:none;
+    }
+
+    .chat-app.open-chat .sidebar{
+        display:none;
+    }
+
+    .chat-app.open-chat .chat-area{
+        display:flex;
+    }
+
 }
 
 </style>
@@ -84,43 +295,364 @@ button:hover{
 
 <body>
 
-<div class="container">
+<div class="chat-app" id="app">
 
-    <h2>My Profile</h2>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
 
-    <!-- PROFILE PICTURE -->
-    <img src="/uploads/user_dp_pics/{{ user.user_dp_pic }}"
-         onerror="this.src='/uploads/user_dp_pics/default_avatar.png'">
+        <div class="sidebar-top">
 
-    <!-- FLASH MESSAGE -->
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class="flash">
-            {{ messages[0] }}
+            <div class="sidebar-title">
+                Chats
+            </div>
+
         </div>
-      {% endif %}
-    {% endwith %}
 
-    <!-- FORM -->
-    <form method="POST" enctype="multipart/form-data">
+        <div class="search-wrap">
 
-        <input type="text"
-               name="full_name"
-               value="{{ user.full_name }}"
-               placeholder="Full name">
+            <input
+                type="text"
+                class="search"
+                placeholder="Search users..."
+                id="searchInput"
+            >
 
-        <textarea name="bio"
-                  placeholder="Write your bio...">{{ user.bio }}</textarea>
+        </div>
 
-        <input type="file"
-               name="user_dp_pic"
-               accept="image/*">
+        <div
+            class="users"
+            id="users"
+        ></div>
 
-        <button type="submit">Update Profile</button>
+    </div>
 
-    </form>
+    <!-- CHAT AREA -->
+    <div class="chat-area">
+
+        <!-- HEADER -->
+        <div
+            class="chat-header"
+            id="chatHeader"
+            style="display:none;"
+        >
+
+            <img
+                id="chatAvatar"
+                src=""
+            >
+
+            <div class="chat-name" id="chatName">
+                User
+            </div>
+
+        </div>
+
+        <!-- EMPTY -->
+        <div
+            class="empty"
+            id="emptyChat"
+        >
+            Select a chat
+        </div>
+
+        <!-- MESSAGES -->
+        <div
+            class="messages"
+            id="messages"
+            style="display:none;"
+        ></div>
+
+        <!-- INPUT -->
+        <div
+            class="chat-input-wrap"
+            id="chatInputWrap"
+            style="display:none;"
+        >
+
+            <input
+                type="text"
+                class="chat-input"
+                id="messageInput"
+                placeholder="Type a message"
+            >
+
+            <button
+                class="send-btn"
+                onclick="sendMessage()"
+            >
+                ➤
+            </button>
+
+        </div>
+
+    </div>
 
 </div>
+
+<script>
+
+let selectedUser = null;
+
+const currentUser =
+    Number("{{ session.get('user_id') }}");
+
+/* LOAD USERS */
+
+async function loadUsers(){
+
+    const res = await fetch("/following");
+
+    const data = await res.json();
+
+    const unreadRes =
+        await fetch("/unread_counts");
+
+    const unreadData =
+        await unreadRes.json();
+
+    const usersDiv =
+        document.getElementById("users");
+
+    usersDiv.innerHTML = "";
+
+    data.users.forEach(user => {
+
+        const unread =
+            unreadData.users[String(user.id)] || 0;
+
+        usersDiv.innerHTML += `
+
+            <div
+                class="user"
+                id="user-${user.id}"
+                onclick="openChat(
+                    ${user.id},
+                    '${user.name}',
+                    '${user.dp || "default_avatar.png"}'
+                )"
+            >
+
+                <img
+                    src="/uploads/user_dp_pics/${user.dp || 'default_avatar.png'}"
+                    onerror="this.src='/uploads/user_dp_pics/default_avatar.png'"
+                >
+
+                <div class="user-info">
+
+                    <div class="user-name">
+                        ${user.name}
+                    </div>
+
+                    <div class="last-msg">
+                        Tap to chat
+                    </div>
+
+                </div>
+
+                ${
+                    unread > 0 ?
+
+                    `
+                    <div class="badge">
+                        ${unread}
+                    </div>
+                    `
+
+                    : ""
+                }
+
+            </div>
+
+        `;
+    });
+
+}
+
+/* OPEN CHAT */
+
+async function openChat(id,name,dp){
+
+    selectedUser = id;
+
+    document
+        .querySelectorAll(".user")
+        .forEach(u => u.classList.remove("active"));
+
+    document
+        .getElementById(`user-${id}`)
+        .classList.add("active");
+
+    document
+        .getElementById("chatHeader")
+        .style.display = "flex";
+
+    document
+        .getElementById("messages")
+        .style.display = "flex";
+
+    document
+        .getElementById("chatInputWrap")
+        .style.display = "flex";
+
+    document
+        .getElementById("emptyChat")
+        .style.display = "none";
+
+    document
+        .getElementById("chatName")
+        .innerText = name;
+
+    document
+        .getElementById("chatAvatar")
+        .src =
+        `/uploads/user_dp_pics/${dp}`;
+
+    if(window.innerWidth < 850){
+
+        document
+            .getElementById("app")
+            .classList.add("open-chat");
+    }
+
+    loadMessages();
+
+}
+
+/* LOAD MESSAGES */
+
+async function loadMessages(){
+
+    if(!selectedUser) return;
+
+    const res = await fetch(
+        `/get_messages/${currentUser}/${selectedUser}`
+    );
+
+    const data = await res.json();
+
+    const box =
+        document.getElementById("messages");
+
+    box.innerHTML = "";
+
+    data.forEach(msg => {
+
+        const mine =
+            msg.sender === currentUser;
+
+        box.innerHTML += `
+
+            <div class="
+                msg
+                ${mine ? 'me' : 'other'}
+            ">
+
+                <div>
+                    ${msg.message}
+                </div>
+
+                <div class="msg-time">
+                    ${msg.created_at}
+                </div>
+
+            </div>
+
+        `;
+    });
+
+    box.scrollTop = box.scrollHeight;
+
+}
+
+/* SEND MESSAGE */
+
+async function sendMessage(){
+
+    const input =
+        document.getElementById("messageInput");
+
+    const text =
+        input.value.trim();
+
+    if(!text || !selectedUser) return;
+
+    await fetch("/send_message",{
+
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/json"
+        },
+
+        body:JSON.stringify({
+            receiver_id:selectedUser,
+            message:text
+        })
+
+    });
+
+    input.value = "";
+
+    loadMessages();
+
+}
+
+/* ENTER SEND */
+
+document
+.getElementById("messageInput")
+.addEventListener("keypress", e => {
+
+    if(e.key === "Enter"){
+
+        sendMessage();
+    }
+
+});
+
+/* SEARCH */
+
+document
+.getElementById("searchInput")
+.addEventListener("input", function(){
+
+    const value =
+        this.value.toLowerCase();
+
+    document
+        .querySelectorAll(".user")
+        .forEach(user => {
+
+            const text =
+                user.innerText.toLowerCase();
+
+            user.style.display =
+                text.includes(value)
+                ? "flex"
+                : "none";
+
+        });
+
+});
+
+/* AUTO REFRESH */
+
+setInterval(() => {
+
+    loadUsers();
+
+    if(selectedUser){
+
+        loadMessages();
+    }
+
+}, 3000);
+
+/* INIT */
+
+loadUsers();
+
+</script>
 
 </body>
 </html>

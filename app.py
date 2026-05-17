@@ -157,27 +157,44 @@ def allowed_file(filename):
 
 def allowed_mime_type(file):
 
-    if not file or not file.mimetype:
+    if not file:
         return False
 
-    mime = file.mimetype.lower()
+    mime = (file.mimetype or "").lower()
 
-    # allow all images
+    allowed_mimes = {
+        # Images
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+
+        # Videos
+        "video/mp4",
+        "video/quicktime",
+
+        # Documents
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+        # APK
+        "application/vnd.android.package-archive",
+
+        # Android fallback
+        "application/octet-stream"
+    }
+
+    # allow generic image/*
     if mime.startswith("image/"):
         return True
 
-    # allow all videos
+    # allow generic video/*
     if mime.startswith("video/"):
         return True
 
-    allowed = {
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.android.package-archive"
-    }
-
-    return mime in allowed
-
+    return mime in allowed_mimes
 #------------------- Routes for Uploaded Files -----------------
 
 @app.route("/uploads/posts/<path:filename>")
@@ -1692,9 +1709,31 @@ def create_post():
                     "error": "Invalid file extension"
                 }), 400
 
-            if not allowed_mime_type(file):
+            if file and file.filename != "":
+
+                if not allowed_file(file.filename):
+                    return jsonify({
+                        "error": "Unsupported file format"
+                    }), 400
+
+            ext = file.filename.rsplit(".", 1)[1].lower()
+
+            filename = f"{uuid.uuid4().hex}.{ext}"
+
+            filename = secure_filename(filename)
+
+            save_path = os.path.join(
+                app.config["POST_UPLOAD_FOLDER"],
+                filename
+            )
+
+            file.save(save_path)
+
+            if os.path.getsize(save_path) == 0:
+                os.remove(save_path)
+
                 return jsonify({
-                    "error": "Invalid file type"
+                    "error": "Upload failed"
                 }), 400
 
             # Generate safe unique filename
