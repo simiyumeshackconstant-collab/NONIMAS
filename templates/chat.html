@@ -89,8 +89,8 @@ button:hover{
     <h2>My Profile</h2>
 
     <!-- PROFILE PICTURE -->
-    <img src="/uploads/user_dp/{{ user.user_dp_pic }}"
-         onerror="this.src='/uploads/user_dp/default_avatar.png'">
+    <img src="/uploads/user_dp_pics/{{ user.user_dp_pic }}"
+         onerror="this.src='/uploads/user_dp_pics/default_avatar.png'">
 
     <!-- FLASH MESSAGE -->
     {% with messages = get_flashed_messages() %}
