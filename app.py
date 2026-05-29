@@ -136,65 +136,6 @@ COMMENT_EARN = 0.0025
 
 
 #-------------------- File Upload Setup ----------------
-
-ALLOWED_EXTENSIONS = {
-    "png",
-    "jpg",
-    "jpeg",
-    "webp",
-    "heic",
-    "heif",
-    "mp4",
-    "mov",
-    "pdf",
-    "docx",
-    "apk"
-}
-
-def allowed_file(filename):
-
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def allowed_mime_type(file):
-
-    if not file:
-        return False
-
-    mime = (file.mimetype or "").lower()
-
-    allowed_mimes = {
-        # Images
-        "image/png",
-        "image/jpeg",
-        "image/jpg",
-        "image/webp",
-        "image/heic",
-        "image/heif",
-
-        # Videos
-        "video/mp4",
-        "video/quicktime",
-
-        # Documents
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-
-        # APK
-        "application/vnd.android.package-archive",
-
-        # Android fallback
-        "application/octet-stream"
-    }
-
-    # allow generic image/*
-    if mime.startswith("image/"):
-        return True
-
-    # allow generic video/*
-    if mime.startswith("video/"):
-        return True
-
-    return mime in allowed_mimes
 #------------------- Routes for Uploaded Files -----------------
 
 @app.route("/uploads/posts/<path:filename>")
@@ -202,9 +143,9 @@ def uploaded_post_file(filename):
 
     return send_from_directory(
         app.config["POST_UPLOAD_FOLDER"],
-        filename
+        filename,
+        as_attachment=False
     )
-
 
 @app.route("/uploads/user_dp_pics/<path:filename>")
 def uploaded_dp_file(filename):
@@ -1678,9 +1619,6 @@ def mutual_buddies():
     })
 
 
-
-# -------- CREATE POST --------
-
 # -------- CREATE POST --------
 @app.route("/create_post", methods=["POST"])
 @csrf.exempt
@@ -1689,84 +1627,102 @@ def create_post():
 
     try:
 
-        content = request.form.get("content")
+        content = request.form.get("content", "").strip()
+
         user_id = session.get("user_id")
 
         file = request.files.get("file")
 
-        if file and file.filename.strip() == "":
-            return jsonify({
-                "error": "Invalid filename"
-            }), 400
-
         media_url = None
         media_type = None
 
+        # ---------------- FILE UPLOAD ----------------
+
         if file and file.filename != "":
 
-            if not allowed_file(file.filename):
+            # ensure extension exists
+            if "." not in file.filename:
+
                 return jsonify({
-                    "error": "Invalid file extension"
+                    "error": "Invalid file"
                 }), 400
 
-            if file and file.filename != "":
-
-                if not allowed_file(file.filename):
-                    return jsonify({
-                        "error": "Unsupported file format"
-                    }), 400
-
             ext = file.filename.rsplit(".", 1)[1].lower()
+            mime = file.mimetype
 
-            filename = f"{uuid.uuid4().hex}.{ext}"
+            if not mime.startswith(("image/", "video/")):
 
-            filename = secure_filename(filename)
+                return jsonify({
+                    "error": "Invalid media file"
+                }), 400
 
+            # allowed file types
+            ALLOWED_EXTENSIONS = {
+                "png",
+                "jpg",
+                "jpeg",
+                "webp",
+                "gif",
+                "mp4",
+                "webm",
+                "mov"
+            }
+
+            # reject unsupported files
+            if ext not in ALLOWED_EXTENSIONS:
+
+                return jsonify({
+                    "error": "Unsupported file type"
+                }), 400
+
+            # unique safe filename
+            filename = secure_filename(
+                f"{uuid.uuid4().hex}.{ext}"
+            )
+
+            # full save path
             save_path = os.path.join(
                 app.config["POST_UPLOAD_FOLDER"],
                 filename
             )
 
+            # save ONCE only
             file.save(save_path)
 
-            if os.path.getsize(save_path) == 0:
-                os.remove(save_path)
-
-                return jsonify({
-                    "error": "Upload failed"
-                }), 400
-
-            # Generate safe unique filename
-            ext = file.filename.rsplit(".", 1)[1].lower()
-
-            filename = f"{uuid.uuid4().hex}.{ext}"
-
-            filename = secure_filename(filename)
-
-            # SAVE INSIDE uploads/posts
-            save_path = os.path.join(
-                app.config["POST_UPLOAD_FOLDER"],
-                filename
-            )
-
-            file.save(save_path)
-
-            # SAVE URL
+            # create accessible URL
             media_url = url_for(
                 "uploaded_post_file",
                 filename=filename
             )
 
-            mime_type = file.mimetype or ""
+            # detect media type
+            IMAGE_EXTENSIONS = {
+                "png",
+                "jpg",
+                "jpeg",
+                "webp",
+                "gif"
+            }
 
-            if mime_type.startswith("image/"):
+            VIDEO_EXTENSIONS = {
+                "mp4",
+                "webm",
+                "mov"
+            }
+
+            if ext in IMAGE_EXTENSIONS:
+
                 media_type = "image"
 
-            elif mime_type.startswith("video/"):
+            elif ext in VIDEO_EXTENSIONS:
+
                 media_type = "video"
 
             else:
+
                 media_type = "file"
+
+        # ---------------- CREATE POST ----------------
 
         post = Post(
             user_id=user_id,
@@ -1777,6 +1733,7 @@ def create_post():
         )
 
         db.session.add(post)
+
         db.session.commit()
 
         return jsonify({
@@ -1785,10 +1742,13 @@ def create_post():
 
     except Exception as e:
 
+        db.session.rollback()
+
+        print("CREATE POST ERROR:", e)
+
         return jsonify({
             "error": str(e)
         }), 500
-
 
 # -------- GET POSTS --------
 
@@ -1796,25 +1756,42 @@ def create_post():
 @login_required
 def get_posts():
 
-    # GET ALL POSTS (LATEST FIRST)
     posts = Post.query.order_by(Post.created_at.desc()).all()
+    post_ids = [p.id for p in posts]
+
+    # batch likes
+    likes_data = db.session.query(
+        Like.post_id,
+        db.func.count(Like.id)
+    ).filter(
+        Like.post_id.in_(post_ids),
+        Like.is_active == True
+    ).group_by(Like.post_id).all()
+
+    likes_map = {p_id: count for p_id, count in likes_data}
+
+    # batch comments
+    comments_data = db.session.query(
+        Comment.post_id,
+        db.func.count(Comment.id)
+    ).filter(
+        Comment.post_id.in_(post_ids)
+    ).group_by(Comment.post_id).all()
+
+    comments_map = {p_id: count for p_id, count in comments_data}
+
+    # user likes (for current user only)
+    user_likes = Like.query.filter(
+        Like.user_id == session["user_id"],
+        Like.post_id.in_(post_ids),
+        Like.is_active == True
+    ).all()
+
+    liked_set = {l.post_id for l in user_likes}
 
     result = []
 
     for p in posts:
-
-        likes_count = Like.query.filter_by(
-            post_id=p.id,
-            is_active=True
-        ).count()
-
-        comments_count = Comment.query.filter_by(post_id=p.id).count()
-
-        liked = Like.query.filter_by(
-            user_id=session["user_id"],
-            post_id=p.id,
-            is_active=True
-        ).first() is not None
 
         result.append({
             "id": p.id,
@@ -1822,9 +1799,9 @@ def get_posts():
             "media": p.media_url,
             "type": p.media_type,
             "user": p.user_id,
-            "likes": likes_count,
-            "comments": comments_count,
-            "liked": liked
+            "likes": likes_map.get(p.id, 0),
+            "comments": comments_map.get(p.id, 0),
+            "liked": p.id in liked_set
         })
 
     return jsonify(result)
@@ -2053,6 +2030,6 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port,
-        debug=True,
+        debug=False,
         allow_unsafe_werkzeug=True
     )
