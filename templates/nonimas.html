@@ -178,10 +178,92 @@ textarea{
     color:white;
     margin-top:5px;
 }
+.post-trigger{
+    background:#140030;
+    border:1px solid #2de2e6;
+    padding:12px;
+    border-radius:20px;
+    color:#aaa;
+    cursor:pointer;
+    margin-bottom:15px;
+}
+
+.composer-modal{
+    position:fixed;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    width:90%;
+    max-width:500px;
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:15px;
+    padding:15px;
+    z-index:10000;
+    display:none;
+}
+
+.composer-modal textarea{
+    width:100%;
+    height:120px;
+    background:#0f0020;
+    border:none;
+    color:white;
+    padding:10px;
+    border-radius:10px;
+    margin-top:10px;
+}
+
+.composer-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    color:#7cf7ff;
+    font-weight:bold;
+}
+
+.overlay{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.7);
+    display:none;
+    z-index:9999;
+}
 </style>
 </head>
 
 <body>
+<div id="composerModalBox" class="composer-modal">
+
+    <div class="composer-header">
+        <span>Create Post</span>
+        <button onclick="closeComposer()">✕</button>
+    </div>
+
+    <textarea id="content" placeholder="Buddie, Wanna say something?"></textarea>
+
+    <div class="composer-tools">
+
+        <button class="media-btn" onclick="openMediaPicker()">
+            📷 Photo / Video
+        </button>
+
+        <div id="selected-file"></div>
+
+    </div>
+
+    <button class="btn" onclick="createPost()">Post</button>
+
+    <input type="file" id="file"
+        accept=".png,.jpg,.jpeg,.webp,.gif,.mp4,.webm,.mov"
+        style="display:none;">
+
+</div>
+
+<div id="overlay" class="overlay" onclick="attemptClose()"></div>
 
 <div class="header">
     <button class="top-btn" onclick="location.href='/dp'">👤</button>
@@ -210,19 +292,9 @@ textarea{
 <!-- FEED -->
 <div class="feed-container">
 
-    <textarea id="content" placeholder="Post anonymously..."></textarea>
-    <button class="media-btn" onclick="openMediaPicker()">
-        📷 Files
-    </button>
-    <div id="selected-file" style="margin-bottom:10px;color:#7cf7ff;"></div>
-    <input
-        type="file"
-        id="file"
-        accept=".png,.jpg,.jpeg,.webp,.gif,.mp4,.webm,.mov"
-        style="display:none;"
-    >
-    <button class="btn" onclick="createPost()">Post</button>
-
+    <div class="post-trigger" onclick="openComposer()">
+        Buddie, Wanna say something?
+    </div>
     <div id="feed"></div>
 
 </div>
@@ -232,7 +304,37 @@ textarea{
 <script>
 
 let user_id = {{ session.get('user_id', 0) | tojson }};
+let draftSaved = "";
 
+function openComposer(){
+    document.getElementById("composerModalBox").style.display = "block";
+    document.getElementById("overlay").style.display = "block";
+
+    document.getElementById("content").value = draftSaved;
+}
+
+function closeComposer(){
+    document.getElementById("composerModalBox").style.display = "none";
+    document.getElementById("overlay").style.display = "none";
+}
+
+function attemptClose(){
+
+    let text = document.getElementById("content").value.trim();
+
+    if(text.length > 0){
+
+        let action = confirm("Discard post? OK = discard, Cancel = save draft");
+
+        if(action){
+            draftSaved = "";
+        }else{
+            draftSaved = text;
+        }
+    }
+
+    closeComposer();
+}
 /* CREATE POST */
 
 async function createPost(){
