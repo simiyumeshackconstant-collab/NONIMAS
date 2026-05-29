@@ -802,6 +802,7 @@ def admin_dashboard():
         total_posts=total_posts,
     )
 @app.route("/delete_post_admin/<int:post_id>", methods=["POST"])
+@csrf.exempt
 @admin_required
 def delete_post_admin(post_id):
 
@@ -845,6 +846,7 @@ def delete_post_admin(post_id):
 # -------- ADMIN POSTS PAGE --------
 
 @app.route("/admin_posts")
+@csrf.exempt
 @login_required
 @admin_required
 def admin_posts():
@@ -891,6 +893,7 @@ def admin_posts():
 # -------- DELETE SELECTED POSTS --------
 
 @app.route("/delete_selected_posts", methods=["POST"])
+@csrf.exempt
 @login_required
 @admin_required
 def delete_selected_posts():
@@ -942,6 +945,7 @@ def delete_selected_posts():
 # -------- CLEAR ALL POSTS --------
 
 @app.route("/clear_all_posts", methods=["POST"])
+@csrf.exempt
 @login_required
 @admin_required
 def clear_all_posts():
