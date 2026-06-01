@@ -1651,8 +1651,21 @@ def create_post():
                     "error": "Invalid file"
                 }), 400
 
-            ext = file.filename.rsplit(".", 1)[1].lower()
-            mime = file.mimetype
+            filename = secure_filename(f"{uuid.uuid4().hex}{os.path.splitext(file.filename)[1].lower()}")
+            ext = filename.rsplit(".", 1)[-1].lower()
+
+            IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
+            VIDEO_EXTENSIONS = {"mp4", "webm", "mov"}
+
+            if ext in IMAGE_EXTENSIONS:
+                media_type = "image"
+            elif ext in VIDEO_EXTENSIONS:
+                media_type = "video"
+            else:
+                media_type = "file"
+            else:
+                return jsonify({"error": "Unsupported file type"}), 400
+            
 
             if not mime.startswith(("image/", "video/")):
 
@@ -1694,10 +1707,7 @@ def create_post():
             file.save(save_path)
 
             # create accessible URL
-            media_url = url_for(
-                "uploaded_post_file",
-                filename=filename
-            )
+            media_url = f"/uploads/posts/{filename}"
 
             # detect media type
             IMAGE_EXTENSIONS = {

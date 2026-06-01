@@ -372,13 +372,20 @@ function loadPosts(){
                 <div>${p.content || ""}</div>
 
                 ${p.media ?
+                `<video controls
+                    style="
+                        width:100%;
+                        margin-top:10px;
+                        border-radius:10px;
+                    "> 
 
-                `<img src="${p.media}"
+                <img src="${p.media}"
                     style="
                         width:100%;
                         margin-top:10px;
                         border-radius:10px;
                     ">`
+
 
                 : ""}
 
