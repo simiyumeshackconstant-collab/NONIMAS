@@ -1656,18 +1656,19 @@ def create_post():
 
             IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
             VIDEO_EXTENSIONS = {"mp4", "webm", "mov"}
+            FILE_EXTENSIONS = {"pdf", "docx"}
 
             if ext in IMAGE_EXTENSIONS:
                 media_type = "image"
             elif ext in VIDEO_EXTENSIONS:
                 media_type = "video"
-            else:
+            elif ext in FILE_EXTENSIONS:
                 media_type = "file"
             else:
                 return jsonify({"error": "Unsupported file type"}), 400
             
-
-            if not mime.startswith(("image/", "video/")):
+            mime = file.mimetype or ""
+            if not mime.startswith(("image/", "video/", "application/", "text/", "audio/")):
 
                 return jsonify({
                     "error": "Invalid media file"
@@ -1682,7 +1683,10 @@ def create_post():
                 "gif",
                 "mp4",
                 "webm",
-                "mov"
+                "mov",
+                "pdf",
+                "docx"
+                
             }
 
             # reject unsupported files
