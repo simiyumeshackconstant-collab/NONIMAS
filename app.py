@@ -32,6 +32,14 @@ import smtplib
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 from email.mime.text import MIMEText
+import cloudinary
+import cloudinary.uploader
+
+cloudinary.config(
+    cloud_name=os.environ.get("CLOUDINARY_NAME"),
+    api_key=os.environ.get("CLOUDINARY_KEY"),
+    api_secret=os.environ.get("CLOUDINARY_SECRET")
+)
 
 # ----------------- App Setup --------------
 from flask_wtf.csrf import CSRFProtect
@@ -1702,12 +1710,12 @@ def create_post():
             )
 
             # full save path
-            file.save(os.path.join(app.config["POST_UPLOAD_FOLDER"], filename))
-
-            media_url = url_for(
-                "uploaded_post_file",
-                filename=filename
+            upload_result = cloudinary.uploader.upload(
+                file,
+                resource_type="auto"
             )
+
+            media_url = upload_result.get("secure_url")
             # detect media type
             IMAGE_EXTENSIONS = {
                 "png",
