@@ -1702,17 +1702,12 @@ def create_post():
             )
 
             # full save path
-            save_path = os.path.join(
-                app.config["POST_UPLOAD_FOLDER"],
-                filename
+            file.save(os.path.join(app.config["POST_UPLOAD_FOLDER"], filename))
+
+            media_url = url_for(
+                "uploaded_post_file",
+                filename=filename
             )
-
-            # save ONCE only
-            file.save(save_path)
-
-            # create accessible URL
-            media_url = f"/uploads/posts/{filename}"
-
             # detect media type
             IMAGE_EXTENSIONS = {
                 "png",
