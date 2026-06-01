@@ -1734,7 +1734,7 @@ def create_post():
 
             else:
 
-                media_type = "file"
+                return jsonify({"error": "Unsupported file type"}), 400
 
         # ---------------- CREATE POST ----------------
 
