@@ -198,70 +198,63 @@ footer {
 
 </body>
 <!-- INSTALL APP CARD -->
-<div id="install-card" style="display:none;">
+<div id="install-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
 
-    <div class="install-content">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <img src="/static/nonimas_logo.png" style="width:35px;height:35px;border-radius:8px;">
 
-        <img
-            src="/static/nonimas_logo.png"
-            class="install-logo"
-        >
+            <div>
+                <div style="color:#7cf7ff;font-size:14px;font-weight:bold;">
+                    Install Nonimas App
+                </div>
+                <div style="color:#ccc;font-size:12px;">
+                    Faster experience
+                </div>
+            </div>
+        </div>
 
-        <div class="install-text">
-            <h3>Install Nonimas App</h3>
-            <p>Faster access. Better experience.</p>
+        <div style="display:flex;gap:8px;">
+
+            <a href="{{ url_for('static', filename='nonimas.apk') }}"
+               download
+               onclick="hideInstallCard()"
+               style="padding:6px 10px;background:#2de2e6;color:#000;border-radius:6px;font-size:12px;text-decoration:none;">
+                Install
+            </a>
+
+            <button onclick="hideInstallCard()"
+                style="padding:6px 10px;background:#0f0020;color:white;border:1px solid #2de2e6;border-radius:6px;font-size:12px;">
+                X
+            </button>
+
         </div>
 
     </div>
-
-    <div class="install-actions">
-
-        <a href="{{ url_for('static', filename='nonimas.apk') }}"
-            download="nonimas.apk"
-            class="install-btn">
-            Download APK
-        </a>
-
-        <button class="later-btn" onclick="hideInstallCard()">
-            Continue Web
-        </button>
-
-    </div>
-
 </div>
 
 <style>
 
 #install-card{
-
     position:fixed;
+    top:0;
+    left:0;
+    right:0;
 
-    bottom:20px;
-    left:20px;
-    right:20px;
+    display:none;
 
-    background:linear-gradient(
-        135deg,
-        #140030,
-        #1f0045
-    );
+    background:linear-gradient(135deg,#140030,#1f0045);
+    border-bottom:1px solid #2de2e6;
 
-    border:1px solid #2de2e6;
+    padding:8px 12px;
+    z-index:999999;
 
-    border-radius:18px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.4);
 
-    padding:18px;
-
-    z-index:99999;
-
-    box-shadow:
-        0 0 20px rgba(45,226,230,0.25);
-
-    animation:slideUp 0.4s ease;
-
-    max-width:500px;
-
-    margin:auto;
+    animation:slideDown 0.3s ease;
+}
+body.banner-visible{
+    padding-top:60px;
 }
 
 .install-content{
@@ -271,27 +264,27 @@ footer {
 }
 
 .install-logo{
-    width:60px;
-    height:60px;
+    width:55px;
+    height:55px;
     border-radius:14px;
 }
 
 .install-text h3{
     margin:0;
     color:#7cf7ff;
-    font-size:18px;
+    font-size:17px;
 }
 
 .install-text p{
-    margin-top:5px;
+    margin-top:4px;
     color:#ddd;
-    font-size:14px;
+    font-size:13px;
 }
 
 .install-actions{
     display:flex;
     gap:10px;
-    margin-top:18px;
+    margin-top:14px;
 }
 
 .install-btn{
@@ -300,7 +293,7 @@ footer {
 
     text-align:center;
 
-    padding:12px;
+    padding:11px;
 
     border-radius:12px;
 
@@ -332,10 +325,14 @@ footer {
     cursor:pointer;
 }
 
-@keyframes slideUp{
+body.banner-visible{
+    padding-top:150px;
+}
+
+@keyframes slideDown{
 
     from{
-        transform:translateY(100px);
+        transform:translateY(-100%);
         opacity:0;
     }
 
@@ -345,69 +342,71 @@ footer {
     }
 }
 
-/* MOBILE */
-
 @media(max-width:600px){
-
-    #install-card{
-        left:10px;
-        right:10px;
-        bottom:10px;
-    }
 
     .install-actions{
         flex-direction:column;
+    }
+
+    body.banner-visible{
+        padding-top:190px;
     }
 }
 </style>
 
 <script>
 
-function isAndroidWebView() {
+function isInstalledApp() {
 
-    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const ua = navigator.userAgent || "";
 
-    // Detect Android WebView/APK
-    return (
-        /wv/.test(ua) ||
-        /Android.*Version\/[\d.]+.*Chrome/.test(ua) ||
-        window.ReactNativeWebView
-    );
+    // Strong indicators of WebView / APK
+    const isWebView =
+        ua.includes("wv") ||
+        ua.includes("Version/") && ua.includes("Chrome") ||
+        window.ReactNativeWebView;
+
+    // Optional: manual flag (BEST PRACTICE)
+    const forcedAppMode = localStorage.getItem("nonimas_app") === "true";
+
+    return isWebView || forcedAppMode;
 }
-
 function showInstallCard(){
 
-    // 🚫 DO NOT SHOW INSIDE APK
+    // 🚫 NEVER SHOW INSIDE APK
     if(isAndroidWebView()){
         return;
     }
 
     const hidden = localStorage.getItem("nonimas_install_hidden");
 
-    if(hidden === "yes") return;
+    if(hidden === "yes"){
+        return;
+    }
 
     document.getElementById("install-card").style.display = "block";
+
+    document.body.classList.add("banner-visible");
 }
 
 function hideInstallCard(){
 
     document.getElementById("install-card").style.display = "none";
 
+    document.body.classList.remove("banner-visible");
+
     localStorage.setItem("nonimas_install_hidden", "yes");
 }
 
-/* show ONLY on normal browser */
 window.addEventListener("load", ()=>{
 
     setTimeout(()=>{
 
         showInstallCard();
 
-    }, 1500);
+    },1000);
 
 });
-
 </script>
-
 
 </html>

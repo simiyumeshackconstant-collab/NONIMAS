@@ -29,6 +29,7 @@ import random
 import string
 import uuid
 import smtplib
+import requests
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 from email.mime.text import MIMEText
@@ -40,6 +41,8 @@ cloudinary.config(
     api_key=os.environ.get("CLOUDINARY_KEY"),
     api_secret=os.environ.get("CLOUDINARY_SECRET")
 )
+PAYSTACK_PUBLIC_KEY = os.environ.get("PAYSTACK_PUBLIC_KEY")
+PAYSTACK_SECRET_KEY = os.environ.get("PAYSTACK_SECRET_KEY")
 
 # ----------------- App Setup --------------
 from flask_wtf.csrf import CSRFProtect
@@ -331,7 +334,28 @@ class Comment(db.Model):
     comment = db.Column(db.Text, nullable=False)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+class DepositTransaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
 
+    user_id = db.Column(db.Integer, nullable=False)
+
+    paystack_reference = db.Column(
+        db.String(100),
+        unique=True,
+        nullable=False
+    )
+
+    amount = db.Column(db.Float, nullable=False)   # USD
+
+    status = db.Column(
+        db.String(20),
+        default="pending"
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
 #----------------- HELPERS ----------------
 
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1077,6 +1101,7 @@ def my_buddies():
     return render_template("my_buddies.html", buddies=result)
 
 @app.route("/deposit", methods=["GET", "POST"])
+@csrf.exempt
 @login_required
 def deposit():
 
@@ -1084,28 +1109,148 @@ def deposit():
 
     wallet = Wallet.query.filter_by(user_id=user_id).first()
 
-    # create wallet if missing
+    # Create wallet if missing
     if not wallet:
-
         wallet = Wallet(
             user_id=user_id,
-            balance=0
+            balance=0.0
         )
-
         db.session.add(wallet)
         db.session.commit()
 
-    # disable deposits for now
     if request.method == "POST":
 
-        flash("Deposits are currently unavailable.")
+        try:
+            amount = float(request.form.get("amount", 0))
 
-        return redirect(url_for("deposit"))
+            if amount <= 0:
+                flash("Please enter a valid amount.")
+                return redirect(url_for("deposit"))
+
+        except:
+            flash("Invalid amount.")
+            return redirect(url_for("deposit"))
+
+        user = User.query.get(user_id)
+
+        if not user or not user.email:
+            flash("Please add an email address before depositing.")
+            return redirect(url_for("deposit"))
+
+        headers = {
+            "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "email": user.email,
+            "amount": int(amount * 100),   # USD cents
+            "currency": "USD",
+            "callback_url": os.environ.get("PAYSTACK_CALLBACK_URL")
+        }
+
+        response = requests.post(
+            "https://api.paystack.co/transaction/initialize",
+            json=payload,
+            headers=headers
+        )
+
+        result = response.json()
+
+        if not result.get("status"):
+            flash("Unable to initialize payment.")
+            return redirect(url_for("deposit"))
+
+        reference = result["data"]["reference"]
+
+        tx = DepositTransaction(
+            user_id=user_id,
+            amount=amount,
+            reference=reference,
+            status="pending"
+        )
+
+        db.session.add(tx)
+        db.session.commit()
+
+        return redirect(
+            result["data"]["authorization_url"]
+        )
 
     return render_template(
         "deposit.html",
         wallet=wallet
     )
+
+@app.route("/verify_deposit")
+@login_required
+def verify_deposit():
+
+    reference = request.args.get("reference")
+
+    if not reference:
+        flash("Invalid payment reference.")
+        return redirect(url_for("deposit"))
+
+    headers = {
+        "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"
+    }
+
+    response = requests.get(
+        f"https://api.paystack.co/transaction/verify/{reference}",
+        headers=headers
+    )
+
+    result = response.json()
+
+    if not result.get("status"):
+        flash("Payment verification failed.")
+        return redirect(url_for("deposit"))
+
+    payment = result["data"]
+
+    # Payment not successful
+    if payment["status"] != "success":
+        flash("Payment was not successful.")
+        return redirect(url_for("deposit"))
+
+    # Find stored transaction
+    tx = DepositTransaction.query.filter_by(
+        reference=reference
+    ).first()
+
+    if not tx:
+        flash("Transaction not found.")
+        return redirect(url_for("deposit"))
+
+    # Prevent duplicate wallet credits
+    if tx.status == "success":
+        flash("Deposit already processed.")
+        return redirect(url_for("wallet_page"))
+
+    wallet = Wallet.query.filter_by(
+        user_id=tx.user_id
+    ).first()
+
+    if not wallet:
+        wallet = Wallet(
+            user_id=tx.user_id,
+            balance=0.0
+        )
+        db.session.add(wallet)
+
+    # Credit wallet
+    wallet.balance += tx.amount
+
+    # Mark transaction completed
+    tx.status = "success"
+
+    db.session.commit()
+
+    flash(f"${tx.amount:.2f} deposited successfully!")
+
+    return redirect(url_for("wallet_page"))
+
 @app.route("/buy_gift_page")
 @login_required
 def buy_gift_page():
@@ -1829,6 +1974,7 @@ def get_posts():
 
 # -------- WALLET API --------
 @app.route("/wallet/<int:user_id>")
+@csrf.exempt
 @login_required
 def wallet(user_id):
 
