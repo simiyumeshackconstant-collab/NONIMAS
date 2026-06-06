@@ -185,8 +185,8 @@ class User(db.Model):
     password = db.Column(db.String(255), nullable=False)
 
     id_number = db.Column(db.String(50), nullable=True)
-    
-
+    is_online = db.Column(db.Boolean, default=False)
+    last_seen = db.Column(db.DateTime)
     balance = db.Column(db.Float, default=0.0)  # USD now
 
 
@@ -318,9 +318,9 @@ class ChatMessage(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    sender_id = db.Column(db.Integer)
+    sender_id = db.Column(db.Integer, index=True)
 
-    receiver_id = db.Column(db.Integer)
+    receiver_id = db.Column(db.Integer, index=True)
 
     message = db.Column(db.Text)
     is_read = db.Column(db.Boolean, default=False)
@@ -1703,28 +1703,17 @@ def my_posts():
     return jsonify(result)
     
 @app.route("/users_to_add")
-
 @login_required
-
 def users_to_add():
 
     user_id = session["user_id"]
-
-
     # people I already added
-
     my_buddies = Buddy.query.filter_by(user_id=user_id).all()
-
     my_ids = [b.buddy_id for b in my_buddies]
-
-
     users = User.query.filter(
 
         User.id != user_id,
-
         ~User.id.in_(my_ids),
-
-        User.user_dp_pic != None
     ).all()
 
 
@@ -1732,26 +1721,19 @@ def users_to_add():
 
         "count": len(users),
 
-        "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic} for u in users]
+        "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic or "default_avatar.png", "is_online": u.is_online, "last_seen": u.last_seen} for u in users]
 
     })
 
 
 
 @app.route("/following")
-
 @login_required
-
 def following():
 
     user_id = session["user_id"]
-
-
     buddies = Buddy.query.filter_by(user_id=user_id).all()
-
     ids = [b.buddy_id for b in buddies]
-
-
     users = User.query.filter(User.id.in_(ids)).all() if ids else []
 
 
@@ -1759,7 +1741,7 @@ def following():
 
         "count": len(users),
 
-        "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic, "bio": u.bio} for u in users]
+        "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic or "default_avatar.png", "is_online": u.is_online, "last_seen": u.last_seen} for u in users]
 
     })
 
@@ -1943,7 +1925,9 @@ def user_info(user_id):
     return jsonify({
         "id": user.id,
         "name": user.full_name,
-        "dp": user.user_dp_pic
+        "dp": user.user_dp_pic or "default_avatar.png",
+        "is_online": user.is_online,
+        "last_seen": user.last_seen
     })
 
 @app.route("/mutual_buddies")
@@ -2172,54 +2156,81 @@ def get_posts():
 def send_message():
 
     data = request.json
-
     sender_id = session["user_id"]   # ✅ FORCE REAL USER
+    text = data["message"].strip()
 
+    if not text:
+        return jsonify({"error": "Message cannot be empty"}), 400
+    
     msg = ChatMessage(
         sender_id=sender_id,
-        receiver_id=int(data["receiver_id"]),
-        message=data["message"]
+        receiver_id=receiver_id,
+        message=text
     )
 
     db.session.add(msg)
     db.session.commit()
 
+    socketio.emit(
+        "new_message",
+        {
+            "sender": sender_id,
+            "receiver": receiver_id,
+            "message": text,
+            "created_at": msg.created_at.strftime("%Y-%m-%d %H:%M")
+        },
+        room=str(receiver_id)
+    )
+
     return jsonify({"success": True})
 
-@app.route("/get_messages/<int:user1>/<int:user2>")
+@app.route("/get_messages/<int:other_user>")
 @login_required
-def get_messages(user1, user2):
+def get_messages(other_user):
 
     current_user = session["user_id"]
 
     # SECURITY CHECK
-    if current_user not in [user1, user2]:
+    if current_user not in [current_user, other_user]:
         return jsonify({"error": "Unauthorized"}), 403
 
     messages = ChatMessage.query.filter(
         (
-            (ChatMessage.sender_id == user1) &
-            (ChatMessage.receiver_id == user2)
+            (ChatMessage.sender_id == current_user) &
+            (ChatMessage.receiver_id == other_user)
         ) |
         (
-            (ChatMessage.sender_id == user2) &
-            (ChatMessage.receiver_id == user1)
+            (ChatMessage.sender_id == other_user) &
+            (ChatMessage.receiver_id == current_user)
         )
     ).order_by(ChatMessage.created_at.asc()).all()
 
     # mark messages as read ONLY for current user
+    unread_messages = []
     for m in messages:
-
-        if m.receiver_id == current_user:
+        if (
+            m.receiver_id == current_user and
+            not m.is_read
+        ):
             m.is_read = True
-
+            unread_messages.append(m.id)
     db.session.commit()
+    if unread_messages:
+        socketio.emit(
+            "messages_read",
+            {
+                "message_ids": unread_messages,
+                "reader": current_user
+            },
+            room=str(current_user)
+        )
 
     return jsonify([
         {
             "sender": m.sender_id,
             "message": m.message,
-            "created_at": m.created_at.strftime("%Y-%m-%d %H:%M")
+            "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
+            "is_read": m.is_read
         }
         for m in messages
     ])
@@ -2249,34 +2260,36 @@ def user_profile(user_id):
         following_count=following_count
     )
 # -------- CLEAR CHAT --------
-
-@app.route("/clear_chat", methods=["POST"])
+@app.route("/clear_chat_both", methods=["POST"])
 @csrf.exempt
 @login_required
-def clear_chat():
-
-    data = request.json
+def clear_chat_both():
 
     current_user = session["user_id"]
+    other_user = int(request.json["other_user"])
 
-    other_user = int(data.get("other_user"))
-
-    # delete ONLY chats belonging to logged-in user
     ChatMessage.query.filter(
-
         (
             (ChatMessage.sender_id == current_user) &
             (ChatMessage.receiver_id == other_user)
-        ) |
-
+        )
+        |
         (
             (ChatMessage.sender_id == other_user) &
             (ChatMessage.receiver_id == current_user)
         )
-
-    ).delete()
+    ).delete(synchronize_session=False)
 
     db.session.commit()
+
+    socketio.emit(
+        "chat_cleared",
+        {
+            "user1": current_user,
+            "user2": other_user
+        },
+        room=str(other_user)
+    )
 
     return jsonify({"success": True})
 
@@ -2322,6 +2335,42 @@ def handle_join(data):
 
     # ONLY join own room
     join_room(str(current_user))
+@socketio.on("connect")
+def handle_connect():
+
+    user_id = session.get("user_id")
+
+    if user_id:
+        user = User.query.get(user_id)
+        if user:
+            user.is_online = True
+            db.session.commit()
+        join_room(str(user_id))
+@socketio.on("disconnect")
+def handle_disconnect():
+
+    user_id = session.get("user_id")
+
+    if user_id:
+
+        user = User.query.get(user_id)
+
+        if user:
+            user.is_online = False
+            user.last_seen = datetime.utcnow()
+            db.session.commit()
+@socketio.on("typing")
+def typing(data):
+
+    receiver = data["receiver"]
+
+    socketio.emit(
+        "typing",
+        {
+            "user": session["user_id"]
+        },
+        room=str(receiver)
+    )
 # ---------------- RUN ----------------
 
 
