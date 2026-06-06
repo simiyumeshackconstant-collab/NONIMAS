@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Withdrawal Requests</title>
+
+<style>
+
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#0b0018;
+    color:white;
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:15px 20px;
+    background:#12002b;
+    border-bottom:1px solid #2de2e6;
+}
+
+.title{
+    font-size:24px;
+    font-weight:bold;
+    color:#7cf7ff;
+}
+
+.back-btn{
+    background:#1f0045;
+    color:white;
+    border:none;
+    padding:10px 15px;
+    border-radius:10px;
+    cursor:pointer;
+}
+
+.container{
+    max-width:1100px;
+    margin:auto;
+    padding:20px;
+}
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:15px;
+    margin-bottom:20px;
+}
+
+.stat-card{
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:16px;
+    padding:20px;
+    text-align:center;
+}
+
+.stat-value{
+    font-size:28px;
+    color:#7cf7ff;
+    font-weight:bold;
+}
+
+.stat-label{
+    color:#aaa;
+    margin-top:8px;
+}
+
+.section{
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:18px;
+    padding:20px;
+}
+
+.section h2{
+    color:#7cf7ff;
+    margin-top:0;
+}
+
+.request-card{
+    background:#1b003d;
+    border-radius:14px;
+    padding:18px;
+    margin-bottom:15px;
+}
+
+.request-card:last-child{
+    margin-bottom:0;
+}
+
+.top-row{
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+}
+
+.user{
+    font-size:18px;
+    font-weight:bold;
+}
+
+.amount{
+    font-size:20px;
+    font-weight:bold;
+    color:#7cf7ff;
+}
+
+.info{
+    margin-top:12px;
+    line-height:1.8;
+}
+
+.label{
+    color:#999;
+}
+
+.status{
+    display:inline-block;
+    margin-top:10px;
+    padding:6px 12px;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:bold;
+}
+
+.pending{
+    background:#5a4300;
+    color:#ffd54f;
+}
+
+.approved{
+    background:#004d2d;
+    color:#00ff99;
+}
+
+.rejected{
+    background:#4d0000;
+    color:#ff6666;
+}
+
+.actions{
+    display:flex;
+    gap:10px;
+    margin-top:15px;
+    flex-wrap:wrap;
+}
+
+.approve-btn{
+    border:none;
+    padding:12px 18px;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:bold;
+    background:#00aa66;
+    color:white;
+}
+
+.reject-btn{
+    border:none;
+    padding:12px 18px;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:bold;
+    background:#cc3333;
+    color:white;
+}
+
+.reason-box{
+    margin-top:12px;
+}
+
+.reason-box input{
+    width:100%;
+    box-sizing:border-box;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:#250050;
+    color:white;
+}
+
+.reason-text{
+    margin-top:10px;
+    color:#ff8888;
+}
+
+.empty{
+    text-align:center;
+    color:#999;
+    padding:40px;
+}
+
+@media(max-width:700px){
+
+    .top-row{
+        flex-direction:column;
+    }
+
+    .actions{
+        flex-direction:column;
+    }
+
+    .approve-btn,
+    .reject-btn{
+        width:100%;
+    }
+
+}
+
+</style>
+</head>
+<body>
+
+<div class="header">
+
+    <button class="back-btn"
+            onclick="location.href='/admin_dashboard'">
+        ← Dashboard
+    </button>
+
+    <div class="title">
+        Withdrawal Requests
+    </div>
+
+</div>
+
+<div class="container">
+
+    <div class="stats">
+
+        <div class="stat-card">
+            <div class="stat-value">
+                {{ withdrawals|length }}
+            </div>
+            <div class="stat-label">
+                Total Requests
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">
+                {{ withdrawals|selectattr('status','equalto','pending')|list|length }}
+            </div>
+            <div class="stat-label">
+                Pending
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">
+                {{ withdrawals|selectattr('status','equalto','approved')|list|length }}
+            </div>
+            <div class="stat-label">
+                Approved
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">
+                {{ withdrawals|selectattr('status','equalto','rejected')|list|length }}
+            </div>
+            <div class="stat-label">
+                Rejected
+            </div>
+        </div>
+
+    </div>
+
+    <div class="section">
+
+        <h2>All Withdrawal Requests</h2>
+
+        {% if withdrawals %}
+
+            {% for w in withdrawals %}
+
+            <div class="request-card">
+
+                <div class="top-row">
+
+                    <div>
+                        <div class="user">
+                            {{ w.user.username }}
+                        </div>
+
+                        <div class="label">
+                            User ID: {{ w.user_id }}
+                        </div>
+                    </div>
+
+                    <div class="amount">
+                        ${{ "%.2f"|format(w.amount) }}
+                    </div>
+
+                </div>
+
+                <div class="info">
+
+                    <div>
+                        <span class="label">Bank:</span>
+                        {{ w.bank_name }}
+                    </div>
+
+                    <div>
+                        <span class="label">Account Name:</span>
+                        {{ w.account_name }}
+                    </div>
+
+                    <div>
+                        <span class="label">Account Number:</span>
+                        {{ w.account_number }}
+                    </div>
+
+                    <div>
+                        <span class="label">Requested:</span>
+                        {{ w.created_at.strftime("%Y-%m-%d %H:%M") }}
+                    </div>
+
+                </div>
+
+                {% if w.status == "pending" %}
+
+                    <div class="status pending">
+                        Pending Review
+                    </div>
+
+                    <div class="actions">
+
+                        <form method="POST"
+                              action="{{ url_for('approve_withdrawal', id=w.id) }}">
+
+                            <button class="approve-btn">
+                                Approve & Mark Paid
+                            </button>
+
+                        </form>
+
+                    </div>
+
+                    <div class="reason-box">
+
+                        <form method="POST"
+                              action="{{ url_for('reject_withdrawal', id=w.id) }}">
+
+                            <input
+                                type="text"
+                                name="reason"
+                                placeholder="Reason for rejection"
+                                required
+                            >
+
+                            <br><br>
+
+                            <button class="reject-btn">
+                                Reject Request
+                            </button>
+
+                        </form>
+
+                    </div>
+
+                {% elif w.status == "approved" %}
+
+                    <div class="status approved">
+                        Approved & Paid
+                    </div>
+
+                {% elif w.status == "rejected" %}
+
+                    <div class="status rejected">
+                        Rejected
+                    </div>
+
+                    {% if w.rejection_reason %}
+
+                        <div class="reason-text">
+                            Reason: {{ w.rejection_reason }}
+                        </div>
+
+                    {% endif %}
+
+                {% endif %}
+
+            </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <div class="empty">
+                No withdrawal requests found.
+            </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+</body>
+</html>

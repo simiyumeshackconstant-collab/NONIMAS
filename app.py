@@ -356,6 +356,34 @@ class DepositTransaction(db.Model):
         db.DateTime,
         default=datetime.utcnow
     )
+class WithdrawalRequest(db.Model):
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, nullable=False)
+
+    amount = db.Column(db.Float, nullable=False)
+
+    account_name = db.Column(db.String(150))
+
+    bank_name = db.Column(db.String(150))
+
+    account_number = db.Column(db.String(100))
+
+    status = db.Column(
+        db.String(20),
+        default="pending"
+    )  # pending, approved, rejected
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+    processed_at = db.Column(
+        db.DateTime,
+        nullable=True
+    )
 #----------------- HELPERS ----------------
 
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1015,6 +1043,58 @@ def clear_all_posts():
     flash("All posts cleared successfully")
 
     return redirect(url_for("admin_posts"))
+
+@app.route("/admin_withdrawals")
+@admin_required
+def admin_withdrawals():
+
+    requests = WithdrawalRequest.query.order_by(
+        WithdrawalRequest.created_at.desc()
+    ).all()
+
+    return render_template(
+        "admin_withdrawals.html",
+        requests=requests
+    )
+@app.route("/approve_withdrawal/<int:id>", methods=["POST"])
+@admin_required
+def approve_withdrawal(id):
+
+    req = WithdrawalRequest.query.get_or_404(id)
+
+    if req.status != "pending":
+        return redirect(url_for("admin_withdrawals"))
+
+    wallet = Wallet.query.filter_by(
+        user_id=req.user_id
+    ).first()
+
+    if wallet.balance < req.amount:
+        req.status = "rejected"
+        db.session.commit()
+        return redirect(url_for("admin_withdrawals"))
+
+    wallet.balance -= req.amount
+
+    req.status = "approved"
+    req.processed_at = datetime.utcnow()
+
+    db.session.commit()
+
+    return redirect(url_for("admin_withdrawals"))
+
+@app.route("/reject_withdrawal/<int:id>", methods=["POST"])
+@admin_required
+def reject_withdrawal(id):
+
+    req = WithdrawalRequest.query.get_or_404(id)
+
+    req.status = "rejected"
+    req.processed_at = datetime.utcnow()
+
+    db.session.commit()
+
+    return redirect(url_for("admin_withdrawals"))
 # ----------- Logout -----------
 
 @app.route("/logout")
@@ -1099,6 +1179,59 @@ def my_buddies():
         })
 
     return render_template("my_buddies.html", buddies=result)
+
+# -------- WALLET --------
+@app.route("/wallet/<int:user_id>")
+@csrf.exempt
+@login_required
+def wallet(user_id):
+
+    current_user = session["user_id"]
+    is_admin = session.get("is_admin", False)
+
+    # SECURITY CHECK
+    if current_user != user_id and not is_admin:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    wallet = Wallet.query.filter_by(user_id=user_id).first()
+
+    # create wallet only for valid authenticated owner
+    if not wallet:
+
+        wallet = Wallet(
+            user_id=user_id,
+            balance=0
+        )
+
+        db.session.add(wallet)
+        db.session.commit()
+
+    return jsonify({
+        "balance": wallet.balance
+    })
+
+@app.route("/wallet_page")
+@login_required
+def wallet_page():
+    return render_template("wallet.html")
+
+@app.route("/earnings")
+@login_required
+def earnings():
+
+    user_id = session["user_id"]
+
+    rows = Earning.query.filter_by(user_id=user_id)\
+        .order_by(Earning.created_at.desc())\
+        .limit(20).all()
+
+    return jsonify([
+        {
+            "amount": e.amount,
+            "date": e.created_at.strftime("%Y-%m-%d %H:%M")
+        }
+        for e in rows
+    ])
 
 @app.route("/deposit", methods=["GET", "POST"])
 @csrf.exempt
@@ -1250,6 +1383,66 @@ def verify_deposit():
     flash(f"${tx.amount:.2f} deposited successfully!")
 
     return redirect(url_for("wallet_page"))
+
+@app.route("/withdraw")
+@login_required
+def withdraw_page():
+
+    user_id = session["user_id"]
+
+    wallet = Wallet.query.filter_by(
+        user_id=user_id
+    ).first()
+
+    withdrawals = WithdrawalRequest.query.filter_by(
+        user_id=user_id
+    ).order_by(
+        WithdrawalRequest.created_at.desc()
+    ).all()
+
+    return render_template(
+        "withdraw.html",
+        wallet=wallet,
+        withdrawals=withdrawals
+    )
+@app.route("/request_withdrawal", methods=["POST"])
+@login_required
+def request_withdrawal():
+
+    user_id = session["user_id"]
+
+    amount = float(request.form["amount"])
+
+    wallet = Wallet.query.filter_by(
+        user_id=user_id
+    ).first()
+
+    if not wallet:
+        flash("Wallet not found")
+        return redirect(url_for("withdraw_page"))
+
+    if amount <= 0:
+        flash("Invalid amount")
+        return redirect(url_for("withdraw_page"))
+
+    if wallet.balance < amount:
+        flash("Insufficient balance")
+        return redirect(url_for("withdraw_page"))
+
+    request_obj = WithdrawalRequest(
+        user_id=user_id,
+        amount=amount,
+        bank_name=request.form["bank_name"],
+        account_name=request.form["account_name"],
+        account_number=request.form["account_number"]
+    )
+
+    db.session.add(request_obj)
+    db.session.commit()
+
+    flash("Withdrawal request submitted")
+
+    return redirect(url_for("withdraw_page"))
 
 @app.route("/buy_gift_page")
 @login_required
@@ -1971,60 +2164,6 @@ def get_posts():
         })
 
     return jsonify(result)
-
-# -------- WALLET API --------
-@app.route("/wallet/<int:user_id>")
-@csrf.exempt
-@login_required
-def wallet(user_id):
-
-    current_user = session["user_id"]
-    is_admin = session.get("is_admin", False)
-
-    # SECURITY CHECK
-    if current_user != user_id and not is_admin:
-        return jsonify({"error": "Unauthorized"}), 403
-
-    wallet = Wallet.query.filter_by(user_id=user_id).first()
-
-    # create wallet only for valid authenticated owner
-    if not wallet:
-
-        wallet = Wallet(
-            user_id=user_id,
-            balance=0
-        )
-
-        db.session.add(wallet)
-        db.session.commit()
-
-    return jsonify({
-        "balance": wallet.balance
-    })
-
-@app.route("/wallet_page")
-@login_required
-def wallet_page():
-    return render_template("wallet.html")
-
-@app.route("/earnings")
-@login_required
-def earnings():
-
-    user_id = session["user_id"]
-
-    rows = Earning.query.filter_by(user_id=user_id)\
-        .order_by(Earning.created_at.desc())\
-        .limit(20).all()
-
-    return jsonify([
-        {
-            "amount": e.amount,
-            "date": e.created_at.strftime("%Y-%m-%d %H:%M")
-        }
-        for e in rows
-    ])
-
 
 # -------- CHAT --------
 @app.route("/send_message", methods=["POST"])

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Withdraw Funds</title>
+
+<style>
+
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#0b0018;
+    color:white;
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:15px 20px;
+    background:#12002b;
+    border-bottom:1px solid #2de2e6;
+}
+
+.title{
+    font-size:22px;
+    color:#7cf7ff;
+    font-weight:bold;
+}
+
+.back-btn{
+    background:#1f0045;
+    border:none;
+    color:white;
+    padding:10px 15px;
+    border-radius:10px;
+    cursor:pointer;
+}
+
+.container{
+    max-width:800px;
+    margin:auto;
+    padding:20px;
+}
+
+.card{
+    background:#140030;
+    border:1px solid #2de2e6;
+    border-radius:18px;
+    padding:20px;
+    margin-bottom:20px;
+}
+
+.balance{
+    text-align:center;
+    font-size:30px;
+    font-weight:bold;
+    color:#7cf7ff;
+    margin-bottom:15px;
+}
+
+.balance-label{
+    text-align:center;
+    color:#aaa;
+    margin-bottom:5px;
+}
+
+h3{
+    color:#7cf7ff;
+    margin-top:0;
+}
+
+input{
+    width:100%;
+    box-sizing:border-box;
+    padding:14px;
+    border:none;
+    border-radius:12px;
+    background:#1f0045;
+    color:white;
+    margin-bottom:15px;
+    outline:none;
+}
+
+input::placeholder{
+    color:#999;
+}
+
+.withdraw-btn{
+    width:100%;
+    border:none;
+    padding:14px;
+    border-radius:12px;
+    font-weight:bold;
+    font-size:15px;
+    cursor:pointer;
+    color:white;
+    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
+}
+
+.withdraw-btn:hover{
+    opacity:.95;
+}
+
+.notice{
+    margin-top:15px;
+    background:#220044;
+    border:1px solid #ffcc00;
+    color:#ffdd66;
+    padding:15px;
+    border-radius:12px;
+    line-height:1.5;
+}
+
+.flash{
+    background:#2b004d;
+    color:#7cf7ff;
+    padding:12px;
+    border-radius:10px;
+    margin-bottom:15px;
+    text-align:center;
+}
+
+.table{
+    width:100%;
+}
+
+.row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 0;
+    border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.row:last-child{
+    border-bottom:none;
+}
+
+.amount{
+    color:#7cf7ff;
+    font-weight:bold;
+}
+
+.date{
+    font-size:12px;
+    color:#999;
+    margin-top:5px;
+}
+
+.pending{
+    color:#ffcc00;
+    font-weight:bold;
+}
+
+.approved{
+    color:#00ff99;
+    font-weight:bold;
+}
+
+.rejected{
+    color:#ff6666;
+    font-weight:bold;
+}
+
+.empty{
+    text-align:center;
+    color:#999;
+    padding:20px;
+}
+
+@media(max-width:600px){
+
+    .row{
+        flex-direction:column;
+        align-items:flex-start;
+        gap:10px;
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+    <button class="back-btn"
+            onclick="location.href='/wallet_page'">
+        ← Back
+    </button>
+
+    <div class="title">
+        Withdraw Funds
+    </div>
+</div>
+
+<div class="container">
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="flash">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+
+        <div class="balance-label">
+            Available Balance
+        </div>
+
+        <div class="balance">
+            ${{ "%.2f"|format(wallet.balance) }}
+        </div>
+
+        <form method="POST"
+              action="{{ url_for('request_withdrawal') }}">
+
+            <input
+                type="number"
+                name="amount"
+                step="0.01"
+                min="1"
+                placeholder="Withdrawal Amount (USD)"
+                required
+            >
+
+            <input
+                type="text"
+                name="bank_name"
+                placeholder="Bank Name"
+                required
+            >
+
+            <input
+                type="text"
+                name="account_name"
+                placeholder="Account Holder Name"
+                required
+            >
+
+            <input
+                type="text"
+                name="account_number"
+                placeholder="Account Number"
+                required
+            >
+
+            <button class="withdraw-btn" type="submit">
+                Submit Withdrawal Request
+            </button>
+
+        </form>
+
+        <div class="notice">
+            Withdrawals are processed within 24-72 hours.<br>
+            Please ensure your bank details are correct to avoid delays.
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <h3>Withdrawal History</h3>
+
+        {% if withdrawals %}
+
+            <div class="table">
+
+                {% for w in withdrawals %}
+
+                <div class="row">
+
+                    <div>
+
+                        <div>
+                            ${{ "%.2f"|format(w.amount) }}
+                        </div>
+
+                        <div class="date">
+                            {{ w.created_at.strftime("%Y-%m-%d %H:%M") }}
+                        </div>
+
+                        <div class="date">
+                            {{ w.bank_name }}
+                        </div>
+
+                    </div>
+
+                    <div>
+
+                        {% if w.status == "pending" %}
+                            <span class="pending">
+                                Pending
+                            </span>
+
+                        {% elif w.status == "approved" %}
+                            <span class="approved">
+                                Approved
+                            </span>
+
+                        {% elif w.status == "rejected" %}
+                            <span class="rejected">
+                                Rejected
+                            </span>
+
+                            {% if w.rejection_reason %}
+                                <div class="date">
+                                    {{ w.rejection_reason }}
+                                </div>
+                            {% endif %}
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        {% else %}
+
+            <div class="empty">
+                No withdrawal requests yet.
+            </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+</body>
+</html>

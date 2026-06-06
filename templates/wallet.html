@@ -159,8 +159,7 @@
             <button class="action-btn" onclick="location.href='/deposit'">
                 Deposit
             </button>
-
-            <button class="action-btn" onclick="withdrawFunds()">
+            <button class="action-btn" onclick="location.href='/withdraw'">
                 Withdraw
             </button>
         </div>
@@ -169,16 +168,16 @@
     <div class="section">
         <h3>Recent Earnings</h3>
 
-        <div id="earnings-list">
-            <div class="empty">Loading earnings...</div>
+        <div id="gifts-list">
+            <div class="empty">Loading gifts...</div>
         </div>
     </div>
 
     <div class="section">
         <h3>Gift Inventory</h3>
 
-        <div id="gift-list">
-            <div class="empty">Loading gifts...</div>
+        <div id="earnings-list">
+            <div class="empty">Loading earnings...</div>
         </div>
     </div>
 
@@ -208,7 +207,7 @@ function loadGifts(){
     .then(r => r.json())
     .then(data => {
 
-        let box = document.getElementById('gift-list');
+        let box = document.getElementById('gifts-list');
 
         if(data.length === 0){
             box.innerHTML = `
@@ -278,10 +277,6 @@ function loadEarnings(){
     .catch(err => {
         console.error(err);
     });
-}
-
-function withdrawFunds(){
-    alert("Withdrawal system coming soon.");
 }
 
 loadWallet();
