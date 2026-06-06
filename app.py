@@ -2149,6 +2149,29 @@ def get_posts():
 
     return jsonify(result)
 
+@app.route("/videos_page")
+def videos_page():
+    return render_template("videos.html")
+
+@app.route("/upload_video", methods=["POST"])
+def upload_video():
+
+    video = request.files.get("video")
+    cover = request.files.get("cover")
+
+    caption = request.form.get(
+        "caption",""
+    )
+
+    if not video:
+        return jsonify({
+            "error":"No video selected"
+        }),400
+
+    return jsonify({
+        "success":True
+    })
+
 # -------- CHAT --------
 @app.route("/send_message", methods=["POST"])
 @csrf.exempt

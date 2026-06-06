@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1">
+
+<title>Videos</title>
+
+<style>
+
+body{
+    margin:0;
+    background:#000;
+    color:white;
+    font-family:Arial;
+}
+
+.header{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+
+    display:flex;
+    align-items:center;
+    gap:10px;
+
+    padding:15px;
+
+    background:rgba(0,0,0,.8);
+
+    z-index:1000;
+}
+
+.search{
+    flex:1;
+
+    padding:10px;
+
+    border:none;
+
+    border-radius:10px;
+
+    background:#222;
+
+    color:white;
+}
+
+.feed{
+    margin-top:70px;
+}
+.upload-bar{
+    margin-top:80px;
+    padding:10px;
+}
+
+.upload-btn{
+
+    width:100%;
+
+    padding:12px;
+
+    border:none;
+
+    border-radius:10px;
+
+    background:#7b2ff7;
+
+    color:white;
+
+    font-size:16px;
+
+    cursor:pointer;
+}
+.modal{
+
+    display:none;
+
+    position:fixed;
+
+    top:0;
+    left:0;
+
+    width:100%;
+    height:100%;
+
+    background:rgba(0,0,0,.8);
+
+    z-index:2000;
+}
+
+.modal-content{
+
+    width:90%;
+    max-width:500px;
+
+    background:#111;
+
+    padding:20px;
+
+    border-radius:10px;
+
+    margin:80px auto;
+
+    color:white;
+}
+
+.modal textarea{
+
+    width:100%;
+
+    height:100px;
+
+    background:#222;
+
+    color:white;
+
+    border:none;
+
+    border-radius:10px;
+
+    padding:10px;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+
+    <button onclick="history.back()">
+        ←
+    </button>
+
+    <input
+        class="search"
+        placeholder="Search videos or #tags">
+    
+
+</div>
+<div class="upload-bar">
+
+    <button class="upload-btn"
+        onclick="openUploadModal()">
+
+        ➕ Create Video
+
+    </button>
+
+</div>
+<div id="uploadModal" class="modal">
+
+    <div class="modal-content">
+
+        <h3>Create Video</h3>
+
+        <input
+            type="file"
+            id="videoFile"
+            accept="video/*">
+
+        <br><br>
+
+
+        <textarea
+            id="caption"
+            placeholder="Caption with #hashtags"></textarea>
+
+        <br><br>
+
+        <button onclick="uploadVideo()">
+            Upload
+        </button>
+
+        <button onclick="closeUploadModal()">
+            Cancel
+        </button>
+
+    </div>
+
+</div>
+
+<div class="feed" id="feed">
+
+</div>
+<script>
+
+function openUploadModal(){
+
+    document.getElementById(
+        "uploadModal"
+    ).style.display="block";
+}
+
+function closeUploadModal(){
+
+    document.getElementById(
+        "uploadModal"
+    ).style.display="none";
+}
+
+async function uploadVideo(){
+
+    const video =
+        document.getElementById(
+            "videoFile"
+        ).files[0];
+
+    const cover =
+        document.getElementById(
+            "coverImage"
+        ).files[0];
+
+    const caption =
+        document.getElementById(
+            "caption"
+        ).value;
+
+    if(!video){
+
+        alert("Select a video");
+
+        return;
+    }
+
+    const fd = new FormData();
+
+    fd.append("video",video);
+
+    if(cover){
+
+        fd.append("cover",cover);
+    }
+
+    fd.append("caption",caption);
+
+    const res = await fetch(
+        "/upload_video",
+        {
+            method:"POST",
+            body:fd
+        }
+    );
+
+    const data = await res.json();
+
+    if(data.success){
+
+        alert("Video uploaded");
+
+        closeUploadModal();
+
+    }else{
+
+        alert(data.error);
+    }
+}
+
+</script>
+</body>
+</html>
