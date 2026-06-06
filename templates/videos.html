@@ -203,63 +203,66 @@ function closeUploadModal(){
     ).style.display="none";
 }
 
-async function uploadVideo(){
+async function loadVideos(){
 
-    const video =
-        document.getElementById(
-            "videoFile"
-        ).files[0];
+    const res = await fetch("/posts");
 
-    const cover =
-        document.getElementById(
-            "coverImage"
-        ).files[0];
+    const posts = await res.json();
 
-    const caption =
-        document.getElementById(
-            "caption"
-        ).value;
+    const videos = posts.filter(
+        p => p.type === "video"
+    );
 
-    if(!video){
+    const feed =
+        document.getElementById("feed");
 
-        alert("Select a video");
+    feed.innerHTML = "";
+
+    if(videos.length === 0){
+
+        feed.innerHTML =
+            "<p style='text-align:center'>No videos found</p>";
 
         return;
     }
 
-    const fd = new FormData();
+    videos.forEach(v=>{
 
-    fd.append("video",video);
+        feed.innerHTML += `
+            <div class="video-card">
 
-    if(cover){
+                <video
+                    src="${v.media}"
+                    controls
+                    width="100%">
+                </video>
 
-        fd.append("cover",cover);
-    }
+                <p>${v.content || ""}</p>
 
-    fd.append("caption",caption);
+            </div>
+        `;
+    });
+}
+function searchVideos(keyword){
 
-    const res = await fetch(
-        "/upload_video",
-        {
-            method:"POST",
-            body:fd
-        }
+    keyword = keyword.toLowerCase();
+
+    const filtered = allVideos.filter(v =>
+
+        (v.content || "")
+        .toLowerCase()
+        .includes(keyword)
     );
 
-    const data = await res.json();
+    renderVideos(filtered);
 
-    if(data.success){
+    if(filtered.length === 0){
 
-        alert("Video uploaded");
-
-        closeUploadModal();
-
-    }else{
-
-        alert(data.error);
+        feed.innerHTML =
+            "<p style='text-align:center'>Nothing found</p>";
     }
 }
-
+loadVideos();
 </script>
 </body>
 </html>

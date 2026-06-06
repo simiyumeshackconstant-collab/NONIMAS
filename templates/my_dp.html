@@ -139,7 +139,13 @@ body{
     padding:10px;
     background:#12002b;
 }
-
+.post video{
+    width:100%;
+    border-radius:10px;
+    margin-top:10px;
+    background:black;
+    max-height:600px;
+}
 .save-btn{
     background:#2de2e6;
     border:none;
@@ -356,7 +362,6 @@ function saveProfile(){
 }
 
 /* ---------------- LOAD POSTS ---------------- */
-
 function loadPosts(){
 
     fetch("/my_posts")
@@ -371,17 +376,44 @@ function loadPosts(){
 
                 <div>${p.content || ""}</div>
 
-                ${p.media ?
-                `<img src="${p.media}"
-                    style="
-                        width:100%;
-                        margin-top:10px;
-                        border-radius:10px;
-                    ">`
+                ${
+                    p.media
+                    ?
+                    (
+                        p.type === "video"
 
+                        ?
 
+                        `
+                        <video
+                            controls
+                            playsinline
+                            preload="metadata"
+                            style="
+                                width:100%;
+                                margin-top:10px;
+                                border-radius:10px;
+                                background:black;
+                            ">
+                            <source src="${p.media}">
+                        </video>
+                        `
 
-                : ""}
+                        :
+
+                        `
+                        <img
+                            src="${p.media}"
+                            style="
+                                width:100%;
+                                margin-top:10px;
+                                border-radius:10px;
+                            ">
+                        `
+                    )
+
+                    : ""
+                }
 
             </div>
 
@@ -389,7 +421,6 @@ function loadPosts(){
 
     });
 }
-
 /* ---------------- LOAD STATS ---------------- */
 
 function loadStats(){
