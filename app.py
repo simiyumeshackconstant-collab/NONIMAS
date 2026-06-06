@@ -98,7 +98,7 @@ app.secret_key = os.environ.get("SECRET_KEY")
 if not app.secret_key:
     raise ValueError("SECRET_KEY environment variable is required")
 
-app.config["APP_NAME"] = "SPACE LIO AI"
+app.config["APP_NAME"] = "Nonimas"
 
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 # ----------------- Database -----------------
