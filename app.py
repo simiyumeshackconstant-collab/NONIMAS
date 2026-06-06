@@ -1166,7 +1166,7 @@ def deposit():
         tx = DepositTransaction(
             user_id=user_id,
             amount=amount,
-            reference=reference,
+            paystack_reference=reference,
             status="pending"
         )
 
@@ -1216,7 +1216,7 @@ def verify_deposit():
 
     # Find stored transaction
     tx = DepositTransaction.query.filter_by(
-        reference=reference
+        paystack_reference=reference
     ).first()
 
     if not tx:
