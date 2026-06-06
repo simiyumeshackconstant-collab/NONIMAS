@@ -2154,18 +2154,30 @@ def videos_page():
     return render_template("videos.html")
 
 # -------- CHAT --------
+@app.route("/chat/<int:user_id>")
+@login_required
+def conversation_page(user_id):
+
+    user = User.query.get_or_404(user_id)
+
+    return render_template(
+        "conversation.html",
+        other_user=user
+    )
 @app.route("/send_message", methods=["POST"])
-@csrf.exempt
 @login_required
 def send_message():
 
-    data = request.json
-    sender_id = session["user_id"]   # ✅ FORCE REAL USER
+    sender_id = session["user_id"]
+
+    data = request.get_json()
+
+    receiver_id = int(data["receiver_id"])
     text = data["message"].strip()
 
     if not text:
-        return jsonify({"error": "Message cannot be empty"}), 400
-    
+        return jsonify({"success": False})
+
     msg = ChatMessage(
         sender_id=sender_id,
         receiver_id=receiver_id,
@@ -2174,7 +2186,6 @@ def send_message():
 
     db.session.add(msg)
     db.session.commit()
-
     socketio.emit(
         "new_message",
         {

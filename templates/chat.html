@@ -1,525 +1,169 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta
-name="viewport"
-content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <title>Chats</title>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
 <style>
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-}
-
-html,
 body{
-    width:100%;
-    height:100%;
-    overflow:hidden;
     margin:0;
-    padding:0;
     font-family:Arial,sans-serif;
-    background:#0b141a;
-    color:#fff;
-}
-
-.chat-app{
-    position:fixed;
-    top:0;
-    left:0;
-    right:0;
-    bottom:0;
-    display:flex;
-    overflow:hidden;
-}
-
-/* ---------------- SIDEBAR ---------------- */
-
-.sidebar{
-    width:340px;
     background:#111b21;
-    display:flex;
-    flex-direction:column;
-    height:100%;
-    border-right:1px solid #222;
+    color:white;
 }
 
-.sidebar-top{
-    padding:12px;
+.header{
     background:#202c33;
+    padding:18px;
+    text-align:center;
+    font-size:22px;
     font-weight:bold;
-    font-size:20px;
-    flex-shrink:0;
 }
 
-.search-wrap{
-    padding:8px;
-    flex-shrink:0;
-}
-
-.search{
-    width:100%;
+.search-box{
     padding:10px;
+    background:#111b21;
+}
+
+#search{
+    width:100%;
+    padding:12px;
     border:none;
     border-radius:8px;
-    background:#202c33;
-    color:#fff;
+    background:#2a3942;
+    color:white;
     font-size:16px;
-}
-
-.users{
-    flex:1;
-    overflow-y:auto;
-    overflow-x:hidden;
-    -webkit-overflow-scrolling:touch;
+    box-sizing:border-box;
 }
 
 .user{
     display:flex;
-    gap:10px;
     align-items:center;
-    padding:10px;
-    border-bottom:1px solid #1f2c34;
+    gap:12px;
+    padding:12px;
+    border-bottom:1px solid #233138;
     cursor:pointer;
-    position:relative;
 }
 
-.user.active,
 .user:hover{
     background:#2a3942;
 }
 
 .user img{
-    width:48px;
-    height:48px;
+    width:50px;
+    height:50px;
     border-radius:50%;
     object-fit:cover;
-    flex-shrink:0;
 }
 
-.user-info{
+.info{
     flex:1;
-    overflow:hidden;
 }
 
-.user-name,
-.last-msg{
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-}
-
-.user-name{
+.name{
     font-weight:bold;
+    margin-bottom:4px;
 }
 
-.last-msg{
-    font-size:12px;
+.bio{
     color:#aaa;
+    font-size:13px;
 }
 
 .badge{
     background:#00a884;
-    border-radius:50%;
+    color:white;
     min-width:22px;
     height:22px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:11px;
-    flex-shrink:0;
-}
-
-/* ---------------- CHAT AREA ---------------- */
-
-.chat-area{
-    flex:1;
-    display:flex;
-    flex-direction:column;
-    height:100%;
-    overflow:hidden;
-}
-
-.chat-header{
-    height:60px;
-    background:#202c33;
-    display:none;
-    align-items:center;
-    gap:10px;
-    padding:0 10px;
-    flex-shrink:0;
-}
-
-.chat-header img{
-    width:40px;
-    height:40px;
     border-radius:50%;
-    object-fit:cover;
-}
-
-#backBtn{
-    display:none;
-    background:none;
-    border:none;
-    color:#fff;
-    font-size:24px;
-}
-
-.typing{
+    display:flex;
+    justify-content:center;
+    align-items:center;
     font-size:12px;
-    color:#9ad;
 }
-
-.empty{
-    flex:1;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    color:#999;
-}
-
-.messages{
-    flex:1;
-    overflow-y:auto;
-    overflow-x:hidden;
-    padding:12px;
-    display:none;
-    flex-direction:column;
-    gap:8px;
-    -webkit-overflow-scrolling:touch;
-}
-
-.msg{
-    max-width:80%;
-    padding:10px;
-    border-radius:12px;
-    word-wrap:break-word;
-}
-
-.me{
-    background:#005c4b;
-    align-self:flex-end;
-}
-
-.other{
-    background:#202c33;
-    align-self:flex-start;
-}
-
-.msg-time{
-    font-size:11px;
-    opacity:.7;
-    margin-top:4px;
-}
-
-.chat-input-wrap{
-    display:none;
-    align-items:center;
-    gap:8px;
-    padding:8px;
-    background:#202c33;
-    border-top:1px solid #2f3b42;
-    flex-shrink:0;
-}
-
-.chat-input{
-    flex:1;
-    padding:10px;
-    border:none;
-    border-radius:8px;
-    background:#2a3942;
-    color:#fff;
-    font-size:16px;
-}
-
-.send-btn{
-    width:48px;
-    height:48px;
-    border:none;
-    border-radius:50%;
-    background:#00a884;
-    color:#fff;
-    font-size:18px;
-    cursor:pointer;
-}
-
-/* ---------------- CONTEXT MENU ---------------- */
-
-.context-menu{
-    position:fixed;
-    display:none;
-    background:#202c33;
-    border:1px solid #333;
-    border-radius:8px;
-    z-index:9999;
-}
-
-.context-menu div{
-    padding:12px;
-    cursor:pointer;
-}
-
-.context-menu div:hover{
-    background:#2a3942;
-}
-
-/* ---------------- MOBILE ---------------- */
-
-@media (max-width:850px){
-
-    .sidebar{
-        width:100%;
-        height:100%;
-    }
-
-    .chat-area{
-        position:absolute;
-        top:0;
-        left:0;
-        right:0;
-        bottom:0;
-        display:none;
-        background:#0b141a;
-    }
-
-    .chat-app.open-chat .sidebar{
-        display:none;
-    }
-
-    .chat-app.open-chat .chat-area{
-        display:flex;
-    }
-
-    #backBtn{
-        display:block;
-    }
-
-    .user{
-        padding:8px;
-    }
-
-    .user img{
-        width:42px;
-        height:42px;
-    }
-
-    .user-name{
-        font-size:14px;
-    }
-
-    .last-msg{
-        font-size:11px;
-    }
-}
-
 </style>
 </head>
+
 <body>
-<div class="chat-app" id="app">
-<div class="sidebar">
-<div class="sidebar-top">Chats</div>
-<div class="search-wrap"><input id="searchInput" class="search" placeholder="Search"></div>
-<div class="users" id="users"></div>
+
+<div class="header">
+Chats
 </div>
 
-<div class="chat-area">
-<div class="chat-header" id="chatHeader">
-<button id="backBtn" onclick="goBack()">←</button>
-<img id="chatAvatar" src="">
-<div>
-<div id="chatName">User</div>
-<div class="typing" id="typing"></div>
-</div>
+<div class="search-box">
+<input id="search" placeholder="Search">
 </div>
 
-<div class="empty" id="emptyChat">Select a chat</div>
-<div class="messages" id="messages"></div>
-
-<div class="chat-input-wrap" id="chatInputWrap">
-<input class="chat-input" id="messageInput" placeholder="Type a message">
-<button class="send-btn" onclick="sendMessage()">➤</button>
-</div>
-</div>
-</div>
-
-<div class="context-menu" id="contextMenu">
-<div onclick="clearBoth()">Clear Chat For Both</div>
-</div>
+<div id="users"></div>
 
 <script>
-const currentUser = Number("{{ session.get('user_id') }}");
-let selectedUser=null;
-let longPressUser=null;
 
-const socket=io();
-socket.emit("join");
-
-socket.on("new_message",data=>{
- if(selectedUser && (data.sender===selectedUser||data.receiver===selectedUser)){
-   loadMessages();
- }
- loadUsers();
-});
-
-socket.on("chat_cleared",()=>{
- if(selectedUser) loadMessages();
-});
-
-function avatarPath(dp){
- if(!dp||dp==="null"||dp==="None") dp="default_avatar.png";
- return "/uploads/user_dp_pics/"+dp;
+function avatar(dp){
+    if(!dp || dp=="None" || dp=="null"){
+        dp="default_avatar.png";
+    }
+    return "/uploads/user_dp_pics/" + dp;
 }
 
 async function loadUsers(){
- const res=await fetch("/following");
- const data=await res.json();
 
- const unread=await (await fetch("/unread_counts")).json();
+    const usersRes = await fetch("/following");
+    const usersData = await usersRes.json();
 
- const users=document.getElementById("users");
- users.innerHTML="";
+    const unreadRes = await fetch("/unread_counts");
+    const unreadData = await unreadRes.json();
 
- data.users.forEach(user=>{
- const count=unread.users[String(user.id)]||0;
- const div=document.createElement("div");
- div.className="user";
- div.id="user-"+user.id;
+    const box=document.getElementById("users");
+    box.innerHTML="";
 
- let timer;
+    usersData.users.forEach(user=>{
 
- div.addEventListener("mousedown",()=>{
-   timer=setTimeout(()=>showMenu(user.id),700);
- });
- div.addEventListener("mouseup",()=>clearTimeout(timer));
- div.addEventListener("mouseleave",()=>clearTimeout(timer));
+        const count=unreadData.users[String(user.id)] || 0;
 
- div.addEventListener("touchstart",()=>{
-   timer=setTimeout(()=>showMenu(user.id),700);
- });
- div.addEventListener("touchend",()=>clearTimeout(timer));
+        const div=document.createElement("div");
+        div.className="user";
 
- div.onclick=()=>openChat(user.id,user.name,user.dp);
+        div.onclick=function(){
+            window.location="/chat/" + user.id;
+        };
 
- div.innerHTML=`
- <img src="${avatarPath(user.dp)}"
- onerror="this.src='/uploads/user_dp_pics/default_avatar.png'">
- <div class="user-info">
-   <div class="user-name">${user.name}</div>
-   <div class="last-msg">${user.bio||'Tap to chat'}</div>
- </div>
- ${count?`<div class="badge">${count}</div>`:''}
- `;
+        div.innerHTML=`
+            <img src="${avatar(user.dp)}"
+            onerror="this.src='/uploads/user_dp_pics/default_avatar.png'">
 
- users.appendChild(div);
- });
+            <div class="info">
+                <div class="name">${user.name}</div>
+                <div class="bio">${user.bio || "Tap to chat"}</div>
+            </div>
+
+            ${count ? `<div class="badge">${count}</div>` : ""}
+        `;
+
+        box.appendChild(div);
+
+    });
+
 }
 
-function showMenu(uid){
- longPressUser=uid;
- const m=document.getElementById("contextMenu");
- m.style.display="block";
- m.style.left="50px";
- m.style.top="100px";
-}
+document.getElementById("search").addEventListener("input",function(){
 
-document.addEventListener("click",()=>{
- document.getElementById("contextMenu").style.display="none";
+    const value=this.value.toLowerCase();
+
+    document.querySelectorAll(".user").forEach(u=>{
+        u.style.display=
+        u.innerText.toLowerCase().includes(value)
+        ? "flex"
+        : "none";
+    });
+
 });
-
-async function clearBoth(){
- if(!confirm("Clear chat for both users?")) return;
-
- await fetch("/clear_chat_both",{
- method:"POST",
- headers:{"Content-Type":"application/json"},
- body:JSON.stringify({other_user:longPressUser})
- });
-
- if(selectedUser===longPressUser) loadMessages();
-}
-
-async function openChat(id,name,dp){
- selectedUser=id;
-
- document.getElementById("chatHeader").style.display="flex";
- document.getElementById("messages").style.display="flex";
- document.getElementById("chatInputWrap").style.display="flex";
- document.getElementById("emptyChat").style.display="none";
-
- document.getElementById("chatName").innerText=name;
- document.getElementById("chatAvatar").src=avatarPath(dp);
-
- if(window.innerWidth<850){
-   document.getElementById("app").classList.add("open-chat");
- }
-
- loadMessages();
-}
-
-async function loadMessages(){
- if(!selectedUser) return;
-
- const res=await fetch(`/get_messages/${currentUser}/${selectedUser}`);
- const data=await res.json();
-
- const box=document.getElementById("messages");
- box.innerHTML="";
-
- data.forEach(msg=>{
- const mine=msg.sender===currentUser;
- const status=mine?(msg.is_read?" ✓✓":" ✓"):"";
-
- const div=document.createElement("div");
- div.className=`msg ${mine?'me':'other'}`;
- div.innerHTML=`
- <div>${msg.message}</div>
- <div class="msg-time">${msg.created_at}${status}</div>
- `;
- box.appendChild(div);
- });
-
- box.scrollTop=box.scrollHeight;
-}
-
-async function sendMessage(){
- const input=document.getElementById("messageInput");
- const text=input.value.trim();
-
- if(!text||!selectedUser) return;
-
- await fetch("/send_message",{
- method:"POST",
- headers:{"Content-Type":"application/json"},
- body:JSON.stringify({
- receiver_id:selectedUser,
- message:text
- })
- });
-
- input.value="";
- loadMessages();
-}
-
-document.getElementById("messageInput").addEventListener("keypress",e=>{
- if(e.key==="Enter") sendMessage();
-});
-
-document.getElementById("searchInput").addEventListener("input",function(){
- const v=this.value.toLowerCase();
- document.querySelectorAll(".user").forEach(u=>{
- u.style.display=u.innerText.toLowerCase().includes(v)?"flex":"none";
- });
-});
-
-function goBack(){
- document.getElementById("app").classList.remove("open-chat");
-}
 
 loadUsers();
 setInterval(loadUsers,10000);
+
 </script>
+
 </body>
 </html>
