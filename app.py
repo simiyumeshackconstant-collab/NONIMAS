@@ -1158,7 +1158,7 @@ def deposit():
         result = response.json()
 
         if not result.get("status"):
-            flash("Unable to initialize payment.")
+            flash(result.get("message", "Unable to initialize payment."))
             return redirect(url_for("deposit"))
 
         reference = result["data"]["reference"]
@@ -1204,14 +1204,14 @@ def verify_deposit():
     result = response.json()
 
     if not result.get("status"):
-        flash("Payment verification failed.")
+        flash(result.get("message", "Payment verification failed."))
         return redirect(url_for("deposit"))
 
     payment = result["data"]
 
     # Payment not successful
     if payment["status"] != "success":
-        flash("Payment was not successful.")
+        flash(payment.get("message", "Payment was not successful."))
         return redirect(url_for("deposit"))
 
     # Find stored transaction
