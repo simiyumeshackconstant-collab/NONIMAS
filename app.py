@@ -2165,6 +2165,7 @@ def conversation_page(user_id):
         other_user=user
     )
 @app.route("/send_message", methods=["POST"])
+@csrf.exempt
 @login_required
 def send_message():
 
@@ -2200,6 +2201,7 @@ def send_message():
     return jsonify({"success": True})
 
 @app.route("/get_messages/<int:other_user>")
+@csrf.exempt
 @login_required
 def get_messages(other_user):
 
@@ -2309,6 +2311,7 @@ def clear_chat_both():
     return jsonify({"success": True})
 
 @app.route("/unread_counts")
+@csrf.exempt
 @login_required
 def unread_counts():
 
