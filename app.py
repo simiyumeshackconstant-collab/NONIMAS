@@ -553,6 +553,85 @@ def nonimas():
 
 
 # -------- ACTIONS --------
+@app.route("/search")
+@csrf.exempt
+@login_required
+def search():
+
+    q = request.args.get("q", "").strip()
+
+    if not q:
+        return jsonify({
+            "users": [],
+            "posts": [],
+            "messages": [],
+            "transactions": []
+        })
+
+    user_id = session["user_id"]
+
+    users = User.query.filter(
+        User.full_name.ilike(f"%{q}%")
+    ).limit(10).all()
+
+    posts = Post.query.filter(
+        Post.content.ilike(f"%{q}%")
+    ).limit(10).all()
+
+    messages = ChatMessage.query.filter(
+        (
+            (ChatMessage.sender_id == user_id) |
+            (ChatMessage.receiver_id == user_id)
+        ) &
+        ChatMessage.message.ilike(f"%{q}%")
+    ).limit(10).all()
+
+    transactions = DepositTransaction.query.filter(
+        DepositTransaction.paystack_reference.ilike(f"%{q}%")
+    ).limit(10).all()
+
+    return jsonify({
+
+        "users": [
+            {
+                "id": u.id,
+                "name": u.full_name,
+                "dp": u.user_dp_pic
+            }
+            for u in users
+        ],
+
+        "posts": [
+            {
+                "id": p.id,
+                "content": p.content[:100]
+            }
+            for p in posts
+        ],
+
+        "messages": [
+            {
+                "id": m.id,
+                "message": m.message[:100],
+                "sender": m.sender_id,
+                "receiver": m.receiver_id
+            }
+            for m in messages
+        ],
+
+        "transactions": [
+            {
+                "id": t.id,
+                "reference": t.paystack_reference,
+                "amount": t.amount
+            }
+            for t in transactions
+        ]
+    })
+@app.route("/search_page")
+@login_required
+def search_page():
+    return render_template("search.html")
 @app.route("/notification_count")
 @login_required
 def notification_count():
@@ -1018,6 +1097,107 @@ def admin_dashboard():
         profit=profit,
         total_users=total_users,
         total_posts=total_posts,
+    )
+@app.route("/admin_users")
+@csrf.exempt
+@login_required
+@admin_required
+def admin_users():
+
+    users = User.query.order_by(
+        User.timestamp.desc()
+    ).all()
+
+    return render_template(
+        "admin_users.html",
+        users=users
+    )
+@app.route(
+    "/delete_selected_users",
+    methods=["POST"]
+)
+@login_required
+@csrf.exempt
+@admin_required
+def delete_selected_users():
+
+    user_ids = request.form.getlist(
+        "user_ids"
+    )
+
+    if not user_ids:
+        flash("No users selected")
+        return redirect(
+            url_for("admin_users")
+        )
+
+    for uid in user_ids:
+
+        user = User.query.get(uid)
+
+        if not user:
+            continue
+
+        # Never delete admins
+        if user.is_admin:
+            continue
+
+        # Delete related records
+
+        Notification.query.filter_by(
+            user_id=user.id
+        ).delete()
+
+        Post.query.filter_by(
+            user_id=user.id
+        ).delete()
+
+        Comment.query.filter_by(
+            user_id=user.id
+        ).delete()
+
+        Like.query.filter_by(
+            user_id=user.id
+        ).delete()
+
+        Buddy.query.filter(
+            (Buddy.user_id == user.id) |
+            (Buddy.buddy_id == user.id)
+        ).delete()
+
+        Wallet.query.filter_by(
+            user_id=user.id
+        ).delete()
+
+        Earning.query.filter_by(
+            user_id=user.id
+        ).delete()
+
+        UserGiftBalance.query.filter_by(
+            user_id=user.id
+        ).delete()
+
+        ChatMessage.query.filter(
+            (ChatMessage.sender_id == user.id) |
+            (ChatMessage.receiver_id == user.id)
+        ).delete()
+
+        WithdrawalRequest.query.filter_by(
+            user_id=user.id
+        ).delete()
+
+        DepositTransaction.query.filter_by(
+            user_id=user.id
+        ).delete()
+
+        db.session.delete(user)
+
+    db.session.commit()
+
+    flash("Selected users deleted")
+
+    return redirect(
+        url_for("admin_users")
     )
 @app.route("/delete_post_admin/<int:post_id>", methods=["POST"])
 @csrf.exempt

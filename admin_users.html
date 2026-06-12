@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Manage Users</h2>
+
+<form
+    method="POST"
+    action="{{ url_for('delete_selected_users') }}"
+>
+
+    <button
+        type="submit"
+        onclick="
+        return confirm(
+        'Delete selected users?'
+        )"
+    >
+        Delete Selected
+    </button>
+
+    <table border="1" width="100%">
+
+        <tr>
+            <th>Select</th>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Country</th>
+        </tr>
+
+        {% for user in users %}
+
+        <tr>
+
+            <td>
+                {% if not user.is_admin %}
+                <input
+                    type="checkbox"
+                    name="user_ids"
+                    value="{{ user.id }}"
+                >
+                {% endif %}
+            </td>
+
+            <td>{{ user.id }}</td>
+
+            <td>{{ user.full_name }}</td>
+
+            <td>{{ user.phone }}</td>
+
+            <td>{{ user.email }}</td>
+
+            <td>{{ user.country }}</td>
+
+        </tr>
+
+        {% endfor %}
+
+    </table>
+
+</form>
+
+{% endblock %}

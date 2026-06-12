@@ -1,0 +1,393 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="search-page">
+
+    <div class="search-header">
+
+        <input
+            type="text"
+            id="searchInput"
+            placeholder="Search users, posts, messages..."
+        >
+
+        <button onclick="performSearch()">
+            Search
+        </button>
+
+    </div>
+
+    <div class="recent-box">
+
+        <h3>Recent Searches</h3>
+
+        <div id="recentList"></div>
+
+    </div>
+
+    <div id="searchResults">
+
+        <div id="usersResults"></div>
+
+        <div id="postsResults"></div>
+
+        <div id="messagesResults"></div>
+
+        <div id="transactionsResults"></div>
+
+    </div>
+
+</div>
+
+<style>
+
+.search-page{
+    max-width:900px;
+    margin:auto;
+    padding:15px;
+}
+
+.search-header{
+    display:flex;
+    gap:10px;
+    margin-bottom:20px;
+}
+
+.search-header input{
+    flex:1;
+    padding:12px;
+    border:1px solid #ddd;
+    border-radius:8px;
+}
+
+.search-header button{
+    padding:12px 20px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.recent-box{
+    margin-bottom:20px;
+}
+
+.recent-item{
+    display:inline-block;
+    padding:8px 12px;
+    margin:5px;
+    border-radius:20px;
+    background:#f2f2f2;
+    cursor:pointer;
+}
+
+.result-section{
+    margin-top:20px;
+}
+
+.result-card{
+    padding:12px;
+    margin-bottom:10px;
+    border-radius:10px;
+    background:#fff;
+    border:1px solid #e5e5e5;
+}
+
+.user-card{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    cursor:pointer;
+}
+
+.user-card img{
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    object-fit:cover;
+}
+
+.empty{
+    color:gray;
+}
+
+</style>
+
+<script>
+
+document.addEventListener("DOMContentLoaded", ()=>{
+
+    loadRecentSearches();
+
+    document
+        .getElementById("searchInput")
+        .addEventListener("keypress", function(e){
+
+            if(e.key==="Enter"){
+                performSearch();
+            }
+
+        });
+
+});
+
+function saveRecentSearch(term){
+
+    let recent =
+        JSON.parse(
+            localStorage.getItem("recentSearches")
+        ) || [];
+
+    recent = recent.filter(
+        item => item !== term
+    );
+
+    recent.unshift(term);
+
+    recent = recent.slice(0,10);
+
+    localStorage.setItem(
+        "recentSearches",
+        JSON.stringify(recent)
+    );
+
+    loadRecentSearches();
+}
+
+function loadRecentSearches(){
+
+    let recent =
+        JSON.parse(
+            localStorage.getItem("recentSearches")
+        ) || [];
+
+    let html = "";
+
+    recent.forEach(term=>{
+
+        html += `
+        <span
+            class="recent-item"
+            onclick="searchAgain('${term}')"
+        >
+            ${term}
+        </span>
+        `;
+
+    });
+
+    document.getElementById(
+        "recentList"
+    ).innerHTML = html;
+}
+
+function searchAgain(term){
+
+    document.getElementById(
+        "searchInput"
+    ).value = term;
+
+    performSearch();
+}
+
+async function performSearch(){
+
+    const q =
+        document.getElementById(
+            "searchInput"
+        ).value.trim();
+
+    if(!q){
+        return;
+    }
+
+    saveRecentSearch(q);
+
+    try{
+
+        const response =
+            await fetch(
+                `/search?q=${encodeURIComponent(q)}`
+            );
+
+        const data =
+            await response.json();
+
+        renderUsers(data.users || []);
+
+        renderPosts(data.posts || []);
+
+        renderMessages(data.messages || []);
+
+        renderTransactions(
+            data.transactions || []
+        );
+
+    }catch(error){
+
+        console.error(error);
+
+    }
+
+}
+
+function renderUsers(users){
+
+    let html =
+        `<div class="result-section">
+            <h2>Users</h2>`;
+
+    if(users.length===0){
+
+        html += `<p class="empty">
+                    No users found
+                 </p>`;
+
+    }else{
+
+        users.forEach(user=>{
+
+            let dp =
+                user.dp ||
+                "default_avatar.png";
+
+            html += `
+            <div
+                class="result-card user-card"
+                onclick="location.href='/user/${user.id}'"
+            >
+
+                <img
+                    src="/uploads/user_dp_pics/${dp}"
+                >
+
+                <strong>${user.name}</strong>
+
+            </div>
+            `;
+
+        });
+
+    }
+
+    html += `</div>`;
+
+    document.getElementById(
+        "usersResults"
+    ).innerHTML = html;
+}
+
+function renderPosts(posts){
+
+    let html =
+        `<div class="result-section">
+            <h2>Posts</h2>`;
+
+    if(posts.length===0){
+
+        html += `<p class="empty">
+                    No posts found
+                 </p>`;
+
+    }else{
+
+        posts.forEach(post=>{
+
+            html += `
+            <div class="result-card">
+
+                ${post.content}
+
+            </div>
+            `;
+
+        });
+
+    }
+
+    html += `</div>`;
+
+    document.getElementById(
+        "postsResults"
+    ).innerHTML = html;
+}
+
+function renderMessages(messages){
+
+    let html =
+        `<div class="result-section">
+            <h2>Messages</h2>`;
+
+    if(messages.length===0){
+
+        html += `<p class="empty">
+                    No messages found
+                 </p>`;
+
+    }else{
+
+        messages.forEach(msg=>{
+
+            html += `
+            <div class="result-card">
+
+                ${msg.message}
+
+            </div>
+            `;
+
+        });
+
+    }
+
+    html += `</div>`;
+
+    document.getElementById(
+        "messagesResults"
+    ).innerHTML = html;
+}
+
+function renderTransactions(transactions){
+
+    let html =
+        `<div class="result-section">
+            <h2>Transactions</h2>`;
+
+    if(transactions.length===0){
+
+        html += `<p class="empty">
+                    No transactions found
+                 </p>`;
+
+    }else{
+
+        transactions.forEach(tx=>{
+
+            html += `
+            <div class="result-card">
+
+                Ref:
+                ${tx.reference}
+
+                <br>
+
+                Amount:
+                $${tx.amount}
+
+            </div>
+            `;
+
+        });
+
+    }
+
+    html += `</div>`;
+
+    document.getElementById(
+        "transactionsResults"
+    ).innerHTML = html;
+}
+
+</script>
+
+{% endblock %}
