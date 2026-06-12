@@ -537,9 +537,7 @@ def seed_gifts():
 # ---------------- ROUTES ----------------
 
 @app.route("/")
-
 @login_required
-
 def nonimas():
 
     if not session.get("is_admin") and not session.get("user_id"):
@@ -851,8 +849,8 @@ def register():
 
         session.pop("pending_user_id", None)
 
-        flash("Account verified successfully! You can now login.")
-        return redirect(url_for("login"))
+        flash("Account verified successfully!")
+        return redirect(url_for("nonimas"))
 
     # ---------- STEP 3: REGISTRATION ----------
     full_name = request.form['full_name']
@@ -987,7 +985,7 @@ def verify_account():
 
         flash("Account verified successfully")
 
-        return redirect(url_for("login"))
+        return redirect(url_for("nonimas"))
 
     return render_template("verify_account.html")
 @app.route("/resend_otp")
