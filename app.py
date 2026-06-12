@@ -840,6 +840,12 @@ def login():
             flash("Invalid login details", "danger")
 
             return redirect(url_for("login"))
+        if not user.is_verified:
+            session["pending_user_id"] = user.id
+
+            flash("Account not verified. Please check your email for OTP.", "warning")
+
+            return redirect(url_for("verify_account"))
 
 
 
@@ -857,7 +863,67 @@ def login():
 
 
     return render_template("login.html")
+@app.route("/verify_account", methods=["GET", "POST"])
+@csrf.exempt
+def verify_account():
 
+    user_id = session.get("pending_user_id")
+
+    if not user_id:
+        return redirect(url_for("login"))
+
+    user = User.query.get(user_id)
+
+    if request.method == "POST":
+
+        otp = request.form.get("otp")
+
+        if otp != user.otp_code:
+            flash("Invalid OTP")
+            return render_template("verify_account.html")
+
+        if datetime.utcnow() > user.otp_expiry:
+            flash("OTP expired")
+            return render_template("verify_account.html")
+
+        user.is_verified = True
+        user.otp_code = None
+        user.otp_expiry = None
+
+        db.session.commit()
+
+        session.pop("pending_user_id", None)
+
+        flash("Account verified successfully")
+
+        return redirect(url_for("login"))
+
+    return render_template("verify_account.html")
+@app.route("/resend_otp")
+@csrf.exempt
+def resend_otp():
+
+    user_id = session.get("pending_user_id")
+
+    if not user_id:
+        return redirect(url_for("login"))
+
+    user = User.query.get(user_id)
+
+    otp = generate_otp()
+
+    user.otp_code = otp
+    user.otp_expiry = datetime.utcnow() + timedelta(minutes=5)
+
+    db.session.commit()
+
+    send_otp_email(user.email, otp)
+
+    flash("New OTP sent")
+
+    return redirect(url_for("verify_account"))
+
+# ----------- Admin Dashboard -----------
 @app.route("/admin_dashboard")
 @login_required
 @admin_required

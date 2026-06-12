@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Verify Account</title>
+
+<style>
+
+body{
+    margin:0;
+    background:#0b141a;
+    color:white;
+    font-family:Arial,sans-serif;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:100vh;
+}
+
+.container{
+    width:90%;
+    max-width:400px;
+    background:#202c33;
+    padding:25px;
+    border-radius:12px;
+    box-sizing:border-box;
+}
+
+h2{
+    text-align:center;
+    margin-top:0;
+    margin-bottom:20px;
+}
+
+input{
+    width:100%;
+    padding:12px;
+    margin-bottom:15px;
+    border:none;
+    border-radius:8px;
+    background:#2a3942;
+    color:white;
+    font-size:16px;
+    box-sizing:border-box;
+}
+
+button{
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:8px;
+    background:#00a884;
+    color:white;
+    font-size:16px;
+    cursor:pointer;
+}
+
+button:hover{
+    opacity:.9;
+}
+
+.resend{
+    text-align:center;
+    margin-top:15px;
+}
+
+.resend a{
+    color:#00a884;
+    text-decoration:none;
+}
+
+.flash{
+    background:#ff9800;
+    color:white;
+    padding:10px;
+    border-radius:8px;
+    margin-bottom:15px;
+    text-align:center;
+}
+
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <h2>Verify Account</h2>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for msg in messages %}
+                <div class="flash">
+                    {{ msg }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+
+        <input
+            type="text"
+            name="otp"
+            placeholder="Enter OTP"
+            maxlength="6"
+            required>
+
+        <button type="submit">
+            Verify Account
+        </button>
+
+    </form>
+
+    <div class="resend">
+        <a href="/resend_otp">
+            Resend OTP
+        </a>
+    </div>
+
+</div>
+
+</body>
+</html>
