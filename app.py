@@ -147,6 +147,19 @@ COMMENT_EARN = 0.0025
 
 
 #-------------------- File Upload Setup ----------------
+ALLOWED_DP_EXTENSIONS = {
+    "png",
+    "jpg",
+    "jpeg",
+    "webp"
+}
+
+def allowed_file(filename):
+    return (
+        "." in filename and
+        filename.rsplit(".", 1)[1].lower()
+        in ALLOWED_DP_EXTENSIONS
+    )
 #------------------- Routes for Uploaded Files -----------------
 
 @app.route("/uploads/posts/<path:filename>")
@@ -1855,27 +1868,18 @@ def dp():
 
         # Update profile picture
 
-        if file and file.filename != '' and allowed_file(file.filename):
+        if file and allowed_file(file.filename):
 
+            ext = file.filename.rsplit(".",1)[1].lower()
 
-            # delete old pic
+            filename = f"user_{user.id}.{ext}"
 
-            if user.user_dp_pic and user.user_dp_pic != 'default_avatar.png':
+            save_path = os.path.join(
+                app.config["DP_UPLOAD_FOLDER"],
+                filename
+            )
 
-                old_path = os.path.join(
-                    app.config["DP_UPLOAD_FOLDER"],
-                    user.user_dp_pic
-                )
-
-                if os.path.exists(old_path):
-
-                    os.remove(old_path)
-
-
-            filename = secure_filename(f"user_{user.id}.{file.filename.rsplit('.',1)[1].lower()}")
-
-            file.save(os.path.join(app.config['DP_UPLOAD_FOLDER'], filename))
-
+            file.save(save_path)
 
             user.user_dp_pic = filename
 
