@@ -156,6 +156,12 @@ body{
     margin-top:10px;
     font-weight:bold;
 }
+.logout{
+    position:fixed;
+    top:15px;
+    right:15px;
+    z-index:9999;
+}
 
 </style>
 </head>
@@ -166,6 +172,12 @@ body{
     <button class="back-btn" onclick="goBack()">
         ← Back
     </button>
+</div>
+<div class="logout">
+    <button class="back-btn" onclick="window.location.href='/logout'">
+        Logout
+    </button>
+
 </div>
 
 <div class="container">

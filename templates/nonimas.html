@@ -281,10 +281,11 @@ textarea{
     <span class="logo">Nonimas</span>
 </div>
 <div class="quick"> 
-    <button class="top-btn" onclick="location.href='/buddies_page'">👤👤</button>
-    <button class="top-btn" onclick="location.href='/wallet_page'">💰</button>
+    <button class="top-btn" onclick="location.href='/buddies_page'">👤👤<span id="buddy-badge" class="badge" style="display:none;">0</span></button>
+    <button class="top-btn" onclick="location.href='/wallet_page'">💰<span id="wallet-badge" class="badge" style="display:none;">0</span></button>
     <button class="top-btn" onclick="location.href='/chat_page'">💬<span id="chat-badge" class="badge" style="display:none;">0</span></button>
     <button class="top-btn" onclick="location.href='/videos_page'">🎬</button>   
+    <button class="top-btn" onclick="location.href='/notifications'">🔔 <span id="notification-badge" class="badge" style="display:none;">0</span></button>
     <button class="top-btn" onclick="location.href='/dp'">👤</button>
 </div>
         
@@ -745,7 +746,74 @@ function loadUnreadMessages(){
     });
 
 }
+function loadWalletCount(){
 
+    fetch("/wallet_count")
+    .then(r => r.json())
+    .then(data => {
+
+        let badge =
+        document.getElementById(
+            "wallet-badge"
+        );
+
+        if(data.count > 0){
+
+            badge.style.display =
+            "flex";
+
+            badge.innerText =
+            data.count;
+
+        }else{
+
+            badge.style.display =
+            "none";
+        }
+
+    });
+
+}
+function loadBuddyCount(){
+
+    fetch("/buddy_count")
+    .then(r => r.json())
+    .then(data => {
+
+        let badge =
+        document.getElementById(
+            "buddy-badge"
+        );
+
+        if(data.count > 0){
+
+            badge.style.display =
+            "flex";
+
+            badge.innerText =
+            data.count;
+
+        }else{
+
+            badge.style.display =
+            "none";
+        }
+
+    });
+
+}
+loadBuddyCount();
+
+setInterval(
+    loadBuddyCount,
+    3000
+);
+loadWalletCount();
+
+setInterval(
+    loadWalletCount,
+    3000
+);
 /* refresh every 3 sec */
 setInterval(loadUnreadMessages,3000);
 

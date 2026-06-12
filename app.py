@@ -209,7 +209,25 @@ class User(db.Model):
     user_dp_pic = db.Column(db.String(255), nullable=True)
 
     bio = db.Column(db.String(255), default="")
+class Notification(db.Model):
 
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer)
+
+    title = db.Column(db.String(255))
+
+    message = db.Column(db.Text)
+
+    is_read = db.Column(
+        db.Boolean,
+        default=False
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
 class Gift(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
@@ -232,7 +250,6 @@ class Like(db.Model):
 
     rewarded = db.Column(db.Boolean, default=False)
 class Post(db.Model):
-
     id = db.Column(db.Integer, primary_key=True)
 
     user_id = db.Column(db.Integer, nullable=False)
@@ -247,8 +264,6 @@ class Post(db.Model):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-
-
 class Buddy(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
@@ -258,11 +273,16 @@ class Buddy(db.Model):
     buddy_id = db.Column(db.Integer)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    seen = db.Column(db.Boolean, default=False)   # NEW
+    user_dp_pic = db.Column(
+        db.String(255),
+        default='default_avatar.png'
+    )
 
-    user_dp_pic = db.Column(db.String(255), default='default_avatar.png')
-
-    bio = db.Column(db.String(255), default="")
-
+    bio = db.Column(
+        db.String(255),
+        default=""
+    )
 
 class Wallet(db.Model):
 
@@ -283,7 +303,7 @@ class Earning(db.Model):
     amount = db.Column(db.Float)
 
     status = db.Column(db.String(20), default="pending")
-
+    seen = db.Column(db.Boolean, default=False)   # NEW
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -403,7 +423,28 @@ def login_required(f):
         return f(*args, **kwargs)
 
     return wrapper
+def create_buddy_milestone(user_id):
 
+    total = Buddy.query.filter_by(
+        buddy_id=user_id
+    ).count()
+
+    milestones = [
+        100,
+        500,
+        1000,
+        5000
+    ]
+
+    if total in milestones:
+
+        notification = Notification(
+            user_id=user_id,
+            title="Buddy Milestone",
+            message=f"Congratulations! You reached {total} buddies."
+        )
+
+        db.session.add(notification)
 
 def admin_required(f):
 
@@ -498,7 +539,43 @@ def nonimas():
     return render_template("nonimas.html")
 
 
-# -------- PAGES --------
+# -------- ACTIONS --------
+@app.route("/notification_count")
+@login_required
+def notification_count():
+
+    count = Notification.query.filter_by(
+        user_id=session["user_id"],
+        is_read=False
+    ).count()
+
+    return jsonify({
+        "count": count
+    })
+@app.route("/notifications")
+@csrf.exempt
+@login_required
+def notifications():
+
+    Notification.query.filter_by(
+        user_id=session["user_id"],
+        is_read=False
+    ).update({
+        "is_read": True
+    })
+
+    db.session.commit()
+
+    notifications = Notification.query.filter_by(
+        user_id=session["user_id"]
+    ).order_by(
+        Notification.created_at.desc()
+    ).all()
+
+    return render_template(
+        "notifications.html",
+        notifications=notifications
+    )
 @app.route("/like_post", methods=["POST"])
 @csrf.exempt
 @login_required
@@ -640,6 +717,7 @@ def get_comments(post_id):
 
     return jsonify(result) 
 @app.route("/chat_page")
+@csrf.exempt
 @login_required
 def chat_page():
 
@@ -647,6 +725,7 @@ def chat_page():
 
 
 @app.route('/register', methods=['GET', 'POST'])
+@csrf.exempt
 def register():
 
     # ---------- STEP 1: SHOW FORM FIRST ----------
@@ -732,7 +811,7 @@ def register():
 # ----------- Login -----------
 
 @app.route("/login", methods=["GET", "POST"])
-
+@csrf.exempt
 def login():
 
     if request.method == "POST":
@@ -1125,62 +1204,7 @@ def about():
 
     return render_template("about.html")
 
-
-@app.route("/buddies_page")
-
-def buddies_page():
-
-    return render_template("buddies.html")
-
-
-@app.route("/my_buddies")
-
-@login_required
-
-def my_buddies():
-
-    user_id = session["user_id"]
-
-
-    # I added
-
-    my_buddies = Buddy.query.filter_by(user_id=user_id).all()
-
-    my_ids = {b.buddy_id for b in my_buddies}
-
-
-    # Added me
-
-    added_me = Buddy.query.filter_by(buddy_id=user_id).all()
-
-    added_me_ids = {b.user_id for b in added_me}
-
-
-    # Combine both sides
-
-    all_ids = my_ids.union(added_me_ids)
-
-
-    users = User.query.filter(User.id.in_(all_ids)).all() if all_ids else []
-
-
-    result = []
-
-    for u in users:
-
-        result.append({
-
-            "dp": u.user_dp_pic if u.user_dp_pic else 'default_avatar.png',
-
-            "name": u.full_name,
-
-            "is_mutual": u.id in my_ids and u.id in added_me_ids
-
-        })
-
-    return render_template("my_buddies.html", buddies=result)
-
-# -------- WALLET --------
+# -------- TRANSACTIONS --------
 @app.route("/wallet/<int:user_id>")
 @csrf.exempt
 @login_required
@@ -1209,13 +1233,39 @@ def wallet(user_id):
     return jsonify({
         "balance": wallet.balance
     })
-
 @app.route("/wallet_page")
+@csrf.exempt
 @login_required
 def wallet_page():
+
+    Earning.query.filter_by(
+        user_id=session["user_id"],
+        seen=False
+    ).update({
+        "seen": True
+    })
+
+    db.session.commit()
+
     return render_template("wallet.html")
+@app.route("/wallet_count")
+@csrf.exempt
+@login_required
+def wallet_count():
+
+    user_id = session["user_id"]
+
+    count = Earning.query.filter_by(
+        user_id=user_id,
+        seen=False
+    ).count()
+
+    return jsonify({
+        "count": count
+    })
 
 @app.route("/earnings")
+@csrf.exempt
 @login_required
 def earnings():
 
@@ -1314,8 +1364,8 @@ def deposit():
         "deposit.html",
         wallet=wallet
     )
-
 @app.route("/verify_deposit")
+@csrf.exempt
 @login_required
 def verify_deposit():
 
@@ -1383,8 +1433,8 @@ def verify_deposit():
     flash(f"${tx.amount:.2f} deposited successfully!")
 
     return redirect(url_for("wallet_page"))
-
 @app.route("/withdraw")
+@csrf.exempt
 @login_required
 def withdraw_page():
 
@@ -1443,13 +1493,11 @@ def request_withdrawal():
     flash("Withdrawal request submitted")
 
     return redirect(url_for("withdraw_page"))
-
 @app.route("/buy_gift_page")
 @login_required
 def buy_gift_page():
 
     return render_template("buy_gift.html")
-
 @app.route("/gifts")
 @login_required
 def get_gifts():
@@ -1471,7 +1519,6 @@ def get_gifts():
             "value": g.value
         } for g in gifts
     ])
-# -------- BUY GIFT PAGE --------
 @app.route("/buy_gift", methods=["POST"])
 @csrf.exempt
 @login_required
@@ -1538,7 +1585,6 @@ def buy_gift():
         "message": f"{gift.name} added to inventory",
         "new_balance": wallet.balance
     })
-
 @app.route("/gift_count/<int:post_id>")
 def gift_count(post_id):
 
@@ -1549,7 +1595,6 @@ def gift_count(post_id):
     return jsonify({
         "count": total or 0
     })
-    
 @app.route("/send_gift", methods=["POST"])
 @csrf.exempt
 @login_required
@@ -1606,6 +1651,15 @@ def send_gift():
         user_id=post.user_id,
         amount=creator_earn
     )
+    sender = User.query.get(sender_id)
+
+    notification = Notification(
+        user_id=post.user_id,
+        title="Gift Received",
+        message=f"{sender.full_name} sent you {quantity} {gift.name}"
+    )
+
+    db.session.add(notification)
     db.session.add(earning)
         # 💳 ADD TO WALLET (NEW)
     add_to_wallet(post.user_id, creator_earn)
@@ -1628,7 +1682,6 @@ def send_gift():
         "remaining": gift_balance.quantity,  # ✅ send back updated value
         "message": "Gift sent successfully"
     })
-
 @app.route("/my_gifts")
 @login_required
 def my_gifts():
@@ -1653,7 +1706,6 @@ def my_gifts():
         }
         for g in balances
     ])
-
 @app.route("/check_gift_access", methods=["POST"])
 @csrf.exempt
 @login_required
@@ -1682,7 +1734,10 @@ def check_gift_access():
         return jsonify({"allowed": False})
 
     return jsonify({"allowed": True})
+
+# -------- CONTENT --------
 @app.route("/my_posts")
+@csrf.exempt
 @login_required
 def my_posts():
     user_id = session["user_id"]
@@ -1701,69 +1756,11 @@ def my_posts():
         })
 
     return jsonify(result)
-    
-@app.route("/users_to_add")
-@login_required
-def users_to_add():
 
-    user_id = session["user_id"]
-    # people I already added
-    my_buddies = Buddy.query.filter_by(user_id=user_id).all()
-    my_ids = [b.buddy_id for b in my_buddies]
-    users = User.query.filter(
-
-        User.id != user_id,
-        ~User.id.in_(my_ids),
-    ).all()
-
-
-    return jsonify({
-
-        "count": len(users),
-
-        "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic or "default_avatar.png", "is_online": u.is_online, "last_seen": u.last_seen} for u in users]
-
-    })
-
-
-
-@app.route("/following")
-@login_required
-def following():
-
-    user_id = session["user_id"]
-    buddies = Buddy.query.filter_by(user_id=user_id).all()
-    ids = [b.buddy_id for b in buddies]
-    users = User.query.filter(User.id.in_(ids)).all() if ids else []
-
-
-    return jsonify({
-
-        "count": len(users),
-
-        "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic or "default_avatar.png", "is_online": u.is_online, "last_seen": u.last_seen} for u in users]
-
-    })
-
-@app.route("/user_stats/<int:user_id>")
-@login_required
-def user_stats(user_id):
-
-    followers = Buddy.query.filter_by(buddy_id=user_id).count()
-    following = Buddy.query.filter_by(user_id=user_id).count()
-
-    posts = Post.query.filter_by(user_id=user_id).count()
-
-    return jsonify({
-        "followers": followers,
-        "following": following,
-        "posts": posts
-    })
-
+# -------- PROFILE --------
 @app.route("/dp", methods=['GET', 'POST'])
 @csrf.exempt
 @login_required
-
 def dp():
 
     user = User.query.get(session['user_id'])
@@ -1827,11 +1824,24 @@ def dp():
 
     return render_template('my_dp.html', user=user)
 
-
-@app.route("/followers")
-
+# -------- BUDDIES PAGE --------
+@app.route("/buddies_page")
+@csrf.exempt
 @login_required
+def buddies_page():
 
+    Buddy.query.filter_by(
+        buddy_id=session["user_id"],
+        seen=False
+    ).update({
+        "seen": True
+    })
+
+    db.session.commit()
+
+    return render_template("buddies.html")
+@app.route("/followers")
+@login_required
 def followers():
 
     user_id = session["user_id"]
@@ -1852,8 +1862,8 @@ def followers():
         "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic, "bio": u.bio} for u in users]
 
     })
-# -------- USER FOLLOWERS (BUDDIES WHO ADDED THIS USER) --------
 @app.route("/followers/<int:user_id>")
+@csrf.exempt
 @login_required
 def user_followers(user_id):
 
@@ -1863,9 +1873,6 @@ def user_followers(user_id):
     users = User.query.filter(User.id.in_(ids)).all() if ids else []
 
     return render_template("followers.html", users=users)
-
-
-# -------- USER FOLLOWING (WHO THIS USER ADDED) --------
 @app.route("/following/<int:user_id>")
 @login_required
 def user_following(user_id):
@@ -1876,9 +1883,6 @@ def user_following(user_id):
     users = User.query.filter(User.id.in_(ids)).all() if ids else []
 
     return render_template("following.html", users=users)
-
-# -------- ADD BUDDY --------
-
 @app.route("/add_buddy", methods=["POST"])
 @csrf.exempt
 @login_required
@@ -1908,15 +1912,67 @@ def add_buddy():
         return jsonify({"error": "Already buddies"})
 
 
-    buddy = Buddy(user_id=user_id, buddy_id=buddy_id)
+    buddy = Buddy(user_id=user_id, buddy_id=buddy_id, seen=False)
 
     db.session.add(buddy)
+    create_buddy_milestone(user_id)
 
     db.session.commit()
-
-
     return jsonify({"success": True})
+@app.route("/users_to_add")
+@csrf.exempt
+@login_required
+def users_to_add():
 
+    user_id = session["user_id"]
+    # people I already added
+    my_buddies = Buddy.query.filter_by(user_id=user_id).all()
+    my_ids = [b.buddy_id for b in my_buddies]
+    users = User.query.filter(
+
+        User.id != user_id,
+        ~User.id.in_(my_ids),
+    ).all()
+
+
+    return jsonify({
+
+        "count": len(users),
+
+        "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic or "default_avatar.png", "is_online": u.is_online, "last_seen": u.last_seen} for u in users]
+
+    })
+@app.route("/following")
+@login_required
+def following():
+
+    user_id = session["user_id"]
+    buddies = Buddy.query.filter_by(user_id=user_id).all()
+    ids = [b.buddy_id for b in buddies]
+    users = User.query.filter(User.id.in_(ids)).all() if ids else []
+
+
+    return jsonify({
+
+        "count": len(users),
+
+        "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic or "default_avatar.png", "is_online": u.is_online, "last_seen": u.last_seen} for u in users]
+
+    })
+@app.route("/user_stats/<int:user_id>")
+@login_required
+def user_stats(user_id):
+
+    followers = Buddy.query.filter_by(buddy_id=user_id).count()
+    following = Buddy.query.filter_by(user_id=user_id).count()
+
+    posts = Post.query.filter_by(user_id=user_id).count()
+
+    return jsonify({
+        "followers": followers,
+        "following": following,
+        "posts": posts
+    })
 @app.route("/user_info/<int:user_id>")
 @login_required
 def user_info(user_id):
@@ -1929,7 +1985,6 @@ def user_info(user_id):
         "is_online": user.is_online,
         "last_seen": user.last_seen
     })
-
 @app.route("/mutual_buddies")
 @login_required
 def mutual_buddies():
@@ -1951,9 +2006,63 @@ def mutual_buddies():
             for u in users
         ]
     })
+@app.route("/buddy_count")
+@csrf.exempt
+@login_required
+def buddy_count():
+
+    user_id = session["user_id"]
+
+    count = Buddy.query.filter_by(
+        buddy_id=user_id,
+        seen=False
+    ).count()
+
+    return jsonify({
+        "count": count
+    })
+@app.route("/my_buddies")
+@login_required
+def my_buddies():
+
+    user_id = session["user_id"]
+    # I added
+
+    my_buddies = Buddy.query.filter_by(user_id=user_id).all()
+
+    my_ids = {b.buddy_id for b in my_buddies}
 
 
-# -------- CREATE POST --------
+    # Added me
+
+    added_me = Buddy.query.filter_by(buddy_id=user_id).all()
+
+    added_me_ids = {b.user_id for b in added_me}
+
+
+    # Combine both sides
+
+    all_ids = my_ids.union(added_me_ids)
+
+
+    users = User.query.filter(User.id.in_(all_ids)).all() if all_ids else []
+
+
+    result = []
+
+    for u in users:
+
+        result.append({
+
+            "dp": u.user_dp_pic if u.user_dp_pic else 'default_avatar.png',
+
+            "name": u.full_name,
+
+            "is_mutual": u.id in my_ids and u.id in added_me_ids
+
+        })
+
+    return render_template("my_buddies.html", buddies=result)
 @app.route("/create_post", methods=["POST"])
 @csrf.exempt
 @login_required
@@ -2092,8 +2201,6 @@ def create_post():
         return jsonify({
             "error": str(e)
         }), 500
-
-# -------- GET POSTS --------
 
 @app.route("/posts")
 @login_required

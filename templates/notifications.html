@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Notifications</title>
+
+<style>
+
+body{
+    margin:0;
+    background:#0b141a;
+    color:white;
+    font-family:Arial,sans-serif;
+}
+
+/* HEADER */
+
+.header{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    height:60px;
+    background:#202c33;
+    display:flex;
+    align-items:center;
+    padding:0 15px;
+    box-sizing:border-box;
+    z-index:100;
+}
+
+.back{
+    text-decoration:none;
+    color:white;
+    font-size:24px;
+    margin-right:15px;
+}
+
+.title{
+    font-size:18px;
+    font-weight:bold;
+}
+
+/* LIST */
+
+.notifications{
+    padding:70px 10px 20px;
+}
+
+.card{
+    background:#202c33;
+    border-radius:12px;
+    padding:12px;
+    margin-bottom:10px;
+    word-wrap:break-word;
+}
+
+.card-title{
+    font-size:15px;
+    font-weight:bold;
+    margin-bottom:6px;
+    color:#00a884;
+}
+
+.card-message{
+    font-size:14px;
+    line-height:1.5;
+}
+
+.card-time{
+    margin-top:8px;
+    font-size:11px;
+    opacity:.7;
+}
+
+.empty{
+    text-align:center;
+    margin-top:80px;
+    opacity:.7;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+
+    <a href="/" class="back">
+        ←
+    </a>
+
+    <div class="title">
+        🔔 Notifications
+    </div>
+
+</div>
+
+<div class="notifications">
+
+{% if notifications %}
+
+    {% for n in notifications %}
+
+    <div class="card">
+
+        <div class="card-title">
+            {{ n.title }}
+        </div>
+
+        <div class="card-message">
+            {{ n.message }}
+        </div>
+
+        <div class="card-time">
+            {{ n.created_at.strftime('%Y-%m-%d %H:%M') }}
+        </div>
+
+    </div>
+
+    {% endfor %}
+
+{% else %}
+
+    <div class="empty">
+        No notifications yet
+    </div>
+
+{% endif %}
+
+</div>
+
+</body>
+</html>
