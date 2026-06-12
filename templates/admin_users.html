@@ -1,7 +1,43 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html>
 
-{% block content %}
+<head>
+    <title>Manage Users</title>
+</head>
+<style>
+body{
+    background:#0b0018;
+    color:white;
+    font-family:Arial;
+    margin:0;
 
+}
+table{
+    border-collapse:collapse;
+    width:100%;
+}
+th, td{
+    border:1px solid #2de2e6;
+    padding:8px;
+    text-align:left;
+}
+th{
+    background:#12002b;
+}
+tr:nth-child(even){
+    background:#1f0045;
+}
+button{
+    background:#1f0045;
+    border:none;
+    color:white;
+    padding:8px 12px;
+    border-radius:8px;
+    margin-bottom:15px;
+    cursor:pointer;
+}
+</style>
+<body>
 <h2>Manage Users</h2>
 
 <form
@@ -62,4 +98,5 @@
 
 </form>
 
-{% endblock %}
+</body>
+</html>
