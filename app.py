@@ -502,10 +502,7 @@ def send_otp_email(to_email, otp):
 
 
     subject = "Your OTP Code"
-
     body = f"Your OTP code is: {otp}. It expires in 5 minutes."
-
-
     msg = MIMEText(body)
 
     msg['Subject'] = subject
@@ -520,6 +517,8 @@ def send_otp_email(to_email, otp):
         server.login(sender_email, sender_password)
 
         server.send_message(msg)
+        print(f"OTP email sent to {to_email}")
+
 def seed_gifts():
     gifts = [
         {"name": "Caros", "value": 0.1, "price": 0.1, "payout": 0.07},

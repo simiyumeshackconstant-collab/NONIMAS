@@ -10,6 +10,16 @@
         font-family: Arial;
         margin: 0;
     }
+    .input, button {
+        background: #1a1a1a;
+        color: white;
+        border: none;
+        border-radius: 5px;
+    }
+    result-card {
+        background: #1a1a1a;
+    }
+    
 </style>
 <body>
 
@@ -81,6 +91,7 @@
 
 .recent-box{
     margin-bottom:20px;
+    
 }
 
 .recent-item{
@@ -88,7 +99,7 @@
     padding:8px 12px;
     margin:5px;
     border-radius:20px;
-    background:#f2f2f2;
+    background:#84b5f5;
     cursor:pointer;
 }
 
@@ -100,7 +111,7 @@
     padding:12px;
     margin-bottom:10px;
     border-radius:10px;
-    background:#fff;
+    background:#84b5f5;
     border:1px solid #e5e5e5;
 }
 
@@ -305,7 +316,8 @@ function renderPosts(posts){
         posts.forEach(post=>{
 
             html += `
-            <div class="result-card">
+            <div class="result-card" onclick="location.href='/post/${post.id}'">
+
 
                 ${post.content}
 
@@ -340,7 +352,7 @@ function renderMessages(messages){
         messages.forEach(msg=>{
 
             html += `
-            <div class="result-card">
+            <div class="result-card" onclick="location.href='/message/${msg.id}'">
 
                 ${msg.message}
 
@@ -375,7 +387,7 @@ function renderTransactions(transactions){
         transactions.forEach(tx=>{
 
             html += `
-            <div class="result-card">
+            <div class="result-card" onclick="location.href='/transaction/${tx.id}'">
 
                 Ref:
                 ${tx.reference}
