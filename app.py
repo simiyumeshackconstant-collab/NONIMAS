@@ -496,28 +496,31 @@ def generate_otp():
 
 def send_otp_email(to_email, otp):
 
-    sender_email = os.environ.get("EMAIL_USER")
+    api_key = os.environ.get("RESEND_API_KEY")
 
-    sender_password = os.environ.get("EMAIL_PASS")
+    response = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "from": "onboarding@resend.dev",
+            "to": [to_email],
+            "subject": "Your OTP Code",
+            "html": f"""
+            <h2>Nonimas Verification</h2>
+            <p>Your OTP code is:</p>
+            <h1>{otp}</h1>
+            <p>This code expires in 5 minutes.</p>
+            """
+        }
+    )
 
+    print("RESEND STATUS:", response.status_code)
+    print("RESEND RESPONSE:", response.text)
 
-    subject = "Your OTP Code"
-    body = f"Your OTP code is: {otp}. It expires in 5 minutes."
-    msg = MIMEText(body)
-
-    msg['Subject'] = subject
-
-    msg['From'] = sender_email
-
-    msg['To'] = to_email
-
-
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-
-        server.login(sender_email, sender_password)
-
-        server.send_message(msg)
-        print(f"OTP email sent to {to_email}")
+    response.raise_for_status()
 
 def seed_gifts():
     gifts = [
