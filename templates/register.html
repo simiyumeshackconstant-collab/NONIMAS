@@ -139,30 +139,8 @@ footer {
 <div class="container">
     <h2>Create an Account</h2>
     <h5>Fill in your details below</h5>
-
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class="alert">
-          {{ messages[0] }}
-        </div>
-      {% endif %}
-      {% endwith %}
-
     <form method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    {% if otp_stage %}
-
-        <h4>Enter OTP sent to your email</h4>
-
-        <div class="mb-3">
-            <input type="text" name="otp" class="form-control" placeholder="Enter OTP" required>
-        </div>
-
-        <button type="submit" class="btn-register">Verify OTP</button>
-
-    {% else %}
-
         <div class="mb-3">
              <label>Full Name</label>
             <input type="text" class="form-control" name="full_name" required>
@@ -194,10 +172,9 @@ footer {
         </div>
 
         <button type="submit" class="btn-register">Register</button>
-    {% endif %}
 
     </form>
-    <a href="{{ url_for('login') }}" class="btn-link">Already have an account? Login</a>
+    <a href="{{ url_for('login') }}" class="btn-link">Login</a>
 </div>
 
 <footer>

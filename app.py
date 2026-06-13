@@ -819,39 +819,7 @@ def register():
 
     # ---------- STEP 1: SHOW FORM FIRST ----------
     if request.method == "GET":
-        session.pop("pending_user_id", None)  # 🔥 reset old sessions
-        return render_template("register.html", otp_stage=False)
-
-    # ---------- STEP 2: OTP VERIFICATION ----------
-    if request.form.get("otp"):
-        user_id = session.get("pending_user_id")
-
-        if not user_id:
-            flash("Session expired. Please register again.")
-            return redirect(url_for("register"))
-
-        user = User.query.get(user_id)
-
-        entered_otp = request.form.get("otp")
-
-        if entered_otp != user.otp_code:
-            flash("Invalid OTP")
-            return render_template("register.html", otp_stage=True)
-
-        if datetime.utcnow() > user.otp_expiry:
-            flash("OTP expired")
-            return render_template("register.html", otp_stage=True)
-
-        user.is_verified = True
-        user.otp_code = None
-        user.otp_expiry = None
-        db.session.commit()
-
-        session.pop("pending_user_id", None)
-
-        flash("Account verified successfully!")
-        return redirect(url_for("nonimas"))
-
+        return render_template("register.html")
     # ---------- STEP 3: REGISTRATION ----------
     full_name = request.form['full_name']
     phone = request.form['phone']
@@ -888,14 +856,15 @@ def register():
     db.session.commit()
 
     session["pending_user_id"] = new_user.id
+    try:
+        if email:
+            send_otp_email(email, otp)
+        flash("OTP sent to your email")
+    except Exception as e:
+        print("OTP error:", e)
+        flash("Failed to send OTP email. Please try again.")
 
-    if email:
-        send_otp_email(email, otp)
-
-    flash("OTP sent to your email")
-
-    return render_template("register.html", otp_stage=True)
-
+    return redirect(url_for("verify_account"))
 
 # ----------- Login -----------
 
@@ -2757,6 +2726,6 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port,
-        debug=True,
+        debug=False,
         allow_unsafe_werkzeug=True
     )
