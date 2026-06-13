@@ -493,8 +493,14 @@ def generate_otp():
 
     return ''.join(random.choices(string.digits, k=6))
 def send_otp_email(to_email, otp):
+    """
+    Send OTP email using Brevo API
+    """
 
     api_key = os.environ.get("BREVO_API_KEY")
+
+    if not api_key:
+        raise Exception("BREVO_API_KEY not found")
 
     headers = {
         "accept": "application/json",
@@ -505,7 +511,7 @@ def send_otp_email(to_email, otp):
     payload = {
         "sender": {
             "name": "Nonimas",
-            "email": os.environ.get("EMAIL_USER")
+            "email": "nonimas@spacelioai.site"
         },
         "to": [
             {
@@ -514,24 +520,32 @@ def send_otp_email(to_email, otp):
         ],
         "subject": "Your OTP Code",
         "htmlContent": f"""
-        <h2>Nonimas Verification</h2>
-        <p>Your OTP code is:</p>
-        <h1>{otp}</h1>
-        <p>This code expires in 5 minutes.</p>
+        <html>
+            <body>
+                <h2>Nonimas Verification</h2>
+                <p>Your OTP code is:</p>
+                <h1>{otp}</h1>
+                <p>This code expires in 5 minutes.</p>
+            </body>
+        </html>
         """
     }
 
     response = requests.post(
         "https://api.brevo.com/v3/smtp/email",
+        headers=headers,
         json=payload,
-        headers=headers
+        timeout=30
     )
 
+    print("=" * 60)
     print("BREVO STATUS:", response.status_code)
     print("BREVO RESPONSE:", response.text)
+    print("=" * 60)
 
     response.raise_for_status()
 
+    return True
 def seed_gifts():
     gifts = [
         {"name": "Caros", "value": 0.1, "price": 0.1, "payout": 0.07},
