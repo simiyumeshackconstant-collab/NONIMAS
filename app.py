@@ -492,33 +492,43 @@ def add_to_wallet(user_id, amount):
 def generate_otp():
 
     return ''.join(random.choices(string.digits, k=6))
-
-
 def send_otp_email(to_email, otp):
 
-    api_key = os.environ.get("RESEND_API_KEY")
+    api_key = os.environ.get("BREVO_API_KEY")
+
+    headers = {
+        "accept": "application/json",
+        "api-key": api_key,
+        "content-type": "application/json"
+    }
+
+    payload = {
+        "sender": {
+            "name": "Nonimas",
+            "email": os.environ.get("EMAIL_USER")
+        },
+        "to": [
+            {
+                "email": to_email
+            }
+        ],
+        "subject": "Your OTP Code",
+        "htmlContent": f"""
+        <h2>Nonimas Verification</h2>
+        <p>Your OTP code is:</p>
+        <h1>{otp}</h1>
+        <p>This code expires in 5 minutes.</p>
+        """
+    }
 
     response = requests.post(
-        "https://api.resend.com/emails",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "from": "onboarding@resend.dev",
-            "to": [to_email],
-            "subject": "Your OTP Code",
-            "html": f"""
-            <h2>Nonimas Verification</h2>
-            <p>Your OTP code is:</p>
-            <h1>{otp}</h1>
-            <p>This code expires in 5 minutes.</p>
-            """
-        }
+        "https://api.brevo.com/v3/smtp/email",
+        json=payload,
+        headers=headers
     )
 
-    print("RESEND STATUS:", response.status_code)
-    print("RESEND RESPONSE:", response.text)
+    print("BREVO STATUS:", response.status_code)
+    print("BREVO RESPONSE:", response.text)
 
     response.raise_for_status()
 
