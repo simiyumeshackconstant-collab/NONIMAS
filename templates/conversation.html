@@ -13,6 +13,7 @@ content="width=device-width, initial-scale=1, viewport-fit=cover">
 
 html,
 body{
+    height:100%;
     margin:0;
     font-family:Arial,sans-serif;
     background:#111b21;
@@ -91,19 +92,15 @@ body{
 }
 
 /* INPUT BAR */
-
 .inputbar{
-    min-height:60px;
-    background:#202c33;
+    position:sticky;
+    bottom:0;
     display:flex;
     align-items:center;
     gap:8px;
     padding:8px;
-    box-sizing:border-box;
+    background:#202c33;
     border-top:1px solid #2f3b42;
-    flex-shrink:0;
-    position:sticky;
-    bottom:0;
 }
 
 #message{
@@ -111,23 +108,23 @@ body{
     border:none;
     outline:none;
     border-radius:8px;
-    padding:10px;
+    padding:12px;
     font-size:16px;
     background:#2a3942;
     color:white;
 }
 
 button{
-    width:48px;
-    height:44px;
+    width:50px;
+    height:48px;
     border:none;
     border-radius:8px;
     background:#00a884;
     color:white;
     font-size:18px;
-    flex-shrink:0;
     cursor:pointer;
 }
+.chat-input{flex:1;padding:10px;border:none;border-radius:8px;background:#2a3942;color:#fff}
 
 </style>
 </head>
@@ -153,14 +150,10 @@ onerror="this.src='/uploads/user_dp_pics/default_avatar.png'">
 </div>
 
 <div class="inputbar">
-
-<input
-id="message"
-placeholder="Type a message">
-
-<button onclick="sendMessage()">
-➤
-</button>
+    <input
+        id="message"
+        class="chat-input"placeholder="Type a message"><button onclick="sendMessage()">➤</button>
+    </div>
 
 </div>
 
@@ -270,4 +263,4 @@ loadMessages();
 </script>
 
 </body>
-</html
+</html>

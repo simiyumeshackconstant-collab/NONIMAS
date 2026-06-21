@@ -886,7 +886,7 @@ def register():
     try:
         if email:
             send_otp_email(email, otp)
-        flash("OTP sent to your email")
+        flash("OTP sent to your email, Check your spam folder if you don't see it.")
     except Exception as e:
         print("OTP error:", e)
         flash("Failed to send OTP email. Please try again.")
@@ -1004,7 +1004,7 @@ def resend_otp():
 
     send_otp_email(user.email, otp)
 
-    flash("New OTP sent")
+    flash("New OTP sent, check your spam folder if you don't see it.")
 
     return redirect(url_for("verify_account"))
 
@@ -2008,64 +2008,82 @@ def my_posts():
         })
 
     return jsonify(result)
+@app.route("/pts",methods=["GET"])
+@csrf.exempt
+@login_required
+def pts():
+    pts = Post.query.filter_by(user_id=session["user_id"])\
+        .order_by(Post.created_at.desc()).all()
+    
+    return render_template("pts.html", pts=pts)
 
 # -------- PROFILE --------
-@app.route("/dp", methods=['GET', 'POST'])
+@app.route("/dp", methods=["GET", "POST"])
 @csrf.exempt
 @login_required
 def dp():
 
-    user = User.query.get(session['user_id'])
+    user = User.query.get(session["user_id"])
 
+    if request.method == "POST":
 
-    if request.method == 'POST':
-
-        full_name = request.form.get("full_name")
-
-        bio = request.form.get("bio")
-
-        file = request.files.get('user_dp_pic')
-
+        full_name = request.form.get("full_name", "").strip()
+        bio = request.form.get("bio", "")
+        file = request.files.get("user_dp_pic")
 
         # Update name
-
         if full_name:
             user.full_name = full_name
 
-
         # Update bio
+        user.bio = bio
 
-        if bio is not None:
-            user.bio = bio
+        # Upload profile picture to Cloudinary
+        if file:
 
+            if not allowed_file(file.filename):
 
-        # Update profile picture
+                flash(
+                    "Only PNG, JPG, JPEG and WEBP files are allowed.",
+                    "error"
+                )
+                return redirect(url_for("dp"))
 
-        if file and allowed_file(file.filename):
+            try:
 
-            ext = file.filename.rsplit(".",1)[1].lower()
+                upload_result = cloudinary.uploader.upload(
+                    file,
+                    folder="user_dp_pics",
+                    public_id=f"user_{user.id}",
+                    overwrite=True,
+                    resource_type="image"
+                )
 
-            filename = f"user_{user.id}.{ext}"
+                user.user_dp_pic = upload_result["secure_url"]
 
-            save_path = os.path.join(
-                app.config["DP_UPLOAD_FOLDER"],
-                filename
-            )
+            except Exception as e:
 
-            file.save(save_path)
+                print("DP Upload Error:", e)
 
-            user.user_dp_pic = filename
-
+                flash(
+                    "Failed to upload profile picture.",
+                    "error"
+                )
+                return redirect(url_for("dp"))
 
         db.session.commit()
 
-        flash("Profile updated successfully!")
+        flash(
+            "Profile updated successfully!",
+            "success"
+        )
 
+        return redirect(url_for("dp"))
 
-        return redirect(url_for('dp'))
-
-
-    return render_template('my_dp.html', user=user)
+    return render_template(
+        "my_dp.html",
+        user=user
+    )
 
 # -------- BUDDIES PAGE --------
 @app.route("/buddies_page")
@@ -2626,6 +2644,26 @@ def user_profile(user_id):
         followers_count=followers_count,
         following_count=following_count
     )
+@app.route("/user_posts/<int:user_id>")
+@login_required
+def user_posts(user_id):
+
+    posts = Post.query.filter_by(
+        user_id=user_id
+    ).order_by(
+        Post.created_at.desc()
+    ).all()
+
+    return jsonify([
+        {
+            "id": p.id,
+            "content": p.content,
+            "media": p.media_url,
+            "type": p.media_type,
+            "created_at": p.created_at.strftime("%Y-%m-%d %H:%M")
+        }
+        for p in posts
+    ])
 # -------- CLEAR CHAT --------
 @app.route("/clear_chat_both", methods=["POST"])
 @csrf.exempt
@@ -2753,6 +2791,6 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port,
-        debug=False,
+        debug=True,
         allow_unsafe_werkzeug=True
     )

@@ -189,9 +189,9 @@ body{
         <!-- AVATAR -->
         <img id="avatar"
              class="avatar"
-             src="/uploads/user_dp_pics/{{ user.user_dp_pic or 'default_avatar.png' }}"
-             onerror="this.src='/uploads/user_dp_pics/default_avatar.png'">
-
+            src="{{ user.user_dp_pic or url_for('static', filename='icons/default_avatar.png') }}"
+             onerror="this.src='/uploads/user_dp_pics/default_avatar.png'"
+        >
         <input type="file" id="fileInput" accept="image/*">
 
         <!-- NAME -->

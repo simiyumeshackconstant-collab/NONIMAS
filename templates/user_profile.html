@@ -284,6 +284,20 @@ body{
 
     border:1px solid #2a2a2a;
 }
+.stats{
+    display:flex;
+    margin-top:15px;
+    gap:10px;
+}
+
+.stat{
+    flex:1;
+    background:#1f0045;
+    padding:10px;
+    text-align:center;
+    border-radius:10px;
+    cursor:pointer;
+}
 
 /* MOBILE */
 
@@ -344,10 +358,9 @@ body{
             <!-- PROFILE PIC -->
             <img
                 class="avatar"
-                src="/uploads/user_dp_pics/{{ user.user_dp_pic or 'default_avatar.png' }}"
+                src="{{ user.user_dp_pic or url_for('static', filename='icons/default_avatar.png') }}"
                 onerror="this.src='/uploads/user_dp_pics/default_avatar.png'"
-            >
-
+                >
             <!-- INFO -->
             <div class="profile-info">
 
@@ -360,22 +373,22 @@ body{
                 </div>
 
                 <!-- COUNTS -->
-                <div class="counts">
+                <div class="stats">
 
-                    <div class="count">
-                        <b>{{ followers_count }}</b>
-                        Buddies
+                    <div class="stat" onclick="goFollowers()">
+                        BUDDIES
+                        <div id="followers">0</div>
                     </div>
 
-                    <div class="count">
-                        <b>{{ following_count }}</b>
-                        Added
+                    <div class="stat" onclick="goFollowing()">
+                        ADDED
+                        <div id="following">0</div>
                     </div>
 
-                    <div class="count">
-                        <b id="postCount">0</b>
+                    <div class="stat">
                         Posts
-                    </div>
+                        <div id="postCount">0</div>
+                        </div>
 
                 </div>
 
@@ -400,7 +413,7 @@ body{
 
                         <button
                             class="btn primary-btn"
-                            onclick="addBuddy({{ user.id }})"
+                            onclick="addBuddy(profileUserId)"
                         >
                             Add Buddy Back
                         </button>
@@ -409,7 +422,7 @@ body{
 
                         <button
                             class="btn primary-btn"
-                            onclick="addBuddy({{ user.id }})"
+                            onclick="addBuddy(profileUserId)"
                         >
                             Add Buddy
                         </button>
@@ -418,7 +431,7 @@ body{
 
                     <button
                         class="btn gray-btn"
-                        onclick="openChat({{ user.id }})"
+                        onclick="openChat(profileUserId)"
                     >
                         Message
                     </button>
@@ -445,82 +458,60 @@ body{
 
 const profileUserId = Number("{{ user.id }}");
 
-/* LOAD POSTS */
+/* LOAD USER POSTS */
 
 function loadPosts(){
 
-    fetch("/posts")
+    fetch(`/user_posts/${profileUserId}`)
     .then(r => r.json())
-    .then(posts => {
+    .then(data => {
 
-        const userPosts = posts.filter(
-            p => Number(p.user) === profileUserId
-        );
+        const container =
+            document.getElementById("posts");
 
-        document.getElementById("postCount").innerText =
-            userPosts.length;
+        if(!data.length){
 
-        if(userPosts.length === 0){
-
-            document.getElementById("posts").innerHTML =
-
-            `
-            <div class="empty">
-                No posts yet.
-            </div>
+            container.innerHTML = `
+                <div class="empty">
+                    No posts yet.
+                </div>
             `;
-
             return;
         }
 
-        document.getElementById("posts").innerHTML =
-
-        userPosts.map(p => `
+        container.innerHTML = data.map(p => `
 
             <div class="post">
 
-                <div class="post-header">
-
-                    <div class="post-name">
-                        {{ user.full_name }}
-                    </div>
-
-                    <div class="post-time">
-                        Post
-                    </div>
-
+                <div class="post-content">
+                    ${p.content || ""}
                 </div>
-
-                ${
-                    p.content ?
-
-                    `
-                    <div class="post-content">
-                        ${p.content}
-                    </div>
-                    `
-
-                    : ""
-                }
 
                 ${
                     p.media ?
 
-                    p.type === "video"
+                    (
+                        p.type === "video"
 
-                    ?
+                        ?
 
-                    `
-                    <video controls>
-                        <source src="${p.media}">
-                    </video>
-                    `
+                        `
+                        <video
+                            controls
+                            playsinline
+                            preload="metadata">
+                            <source src="${p.media}">
+                        </video>
+                        `
 
-                    :
+                        :
 
-                    `
-                    <img src="${p.media}">
-                    `
+                        `
+                        <img
+                            src="${p.media}"
+                            alt="">
+                        `
+                    )
 
                     : ""
                 }
@@ -533,52 +524,92 @@ function loadPosts(){
 
 }
 
+/* LOAD COUNTS */
+
+function loadStats(){
+
+    fetch(`/user_stats/${profileUserId}`)
+    .then(r => r.json())
+    .then(data => {
+
+        document.getElementById("followers")
+            .innerText = data.followers;
+
+        document.getElementById("following")
+            .innerText = data.following;
+
+        document.getElementById("postCount")
+            .innerText = data.posts;
+
+    });
+
+}
+
+/* FOLLOWERS */
+
+function goFollowers(){
+
+    window.location.href =
+        `/followers/${profileUserId}`;
+
+}
+
+/* FOLLOWING */
+
+function goFollowing(){
+
+    window.location.href =
+        `/following/${profileUserId}`;
+
+}
+
+/* CHAT */
+
+function openChat(userId){
+
+    window.location.href =
+        `/chat/${userId}`;
+
+}
+
 /* ADD BUDDY */
 
-function addBuddy(id){
+function addBuddy(userId){
 
     fetch("/add_buddy",{
-
         method:"POST",
-
         headers:{
             "Content-Type":"application/json"
         },
-
         body:JSON.stringify({
-            buddy_id:id
+            buddy_id:userId
         })
-
     })
     .then(r => r.json())
-    .then(d => {
+    .then(data => {
 
-        if(d.success){
+        if(data.success){
 
             location.reload();
 
         }else{
 
-            alert(d.error || "Failed");
+            alert(
+                data.error ||
+                "Could not add buddy"
+            );
+
         }
 
     });
 
 }
 
-/* CHAT */
-
-function openChat(id){
-
-    window.location.href =
-        `/chat_page?user=${id}`;
-}
-
 /* INIT */
 
+loadStats();
 loadPosts();
 
 </script>
-
 </body>
 </html>

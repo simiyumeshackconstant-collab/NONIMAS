@@ -307,8 +307,8 @@ textarea{
 </div>
 
 <script>
-
-let user_id = {{ session.get('user_id', 0) | tojson }};
+loadPosts();
+let user_id = session.get('user_id', 0) | tojson;
 let draftSaved = "";
 
 function openComposer(){
@@ -819,8 +819,7 @@ setInterval(loadUnreadMessages,3000);
 
 loadUnreadMessages();
 loadPosts();
-
-/* INITI
 </script>
 </body>
 </html>
+

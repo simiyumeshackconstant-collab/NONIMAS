@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>My Buddies</title>
 
 <style>
+
 body{
     background:#0b0018;
     color:white;
@@ -14,7 +15,6 @@ body{
     margin:0;
 }
 
-/* HEADER */
 .header{
     display:flex;
     justify-content:center;
@@ -26,14 +26,12 @@ body{
     font-size:18px;
 }
 
-/* CONTAINER */
 .container{
     padding:20px;
-    max-width:600px;
+    max-width:650px;
     margin:auto;
 }
 
-/* SECTION TITLE */
 .section-title{
     margin-top:25px;
     margin-bottom:8px;
@@ -43,153 +41,225 @@ body{
     padding-left:8px;
 }
 
-/* COUNT */
 .count{
     font-size:13px;
     color:#aaa;
     margin-bottom:10px;
 }
 
-/* CARD */
 .card{
     background:#140030;
     border:1px solid #2de2e6;
-    padding:6px;
-    border-radius:6px;
-    margin-bottom:6px;
-    display:square;
-    justify-content:space-between;
-    align-items:center;
+    border-radius:10px;
+    padding:10px;
+    margin-bottom:10px;
     cursor:pointer;
-    transition:0.2s;
+    transition:.2s;
 }
 
 .card:hover{
-    background:#1c0042;
+    background:#1d0046;
 }
 
-/* NAME */
-.name{
-    font-size:14px;
+.user-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
 }
 
-/* BUTTON */
-.btn{
-    padding:6px 6px;
-    border:none;
-    border-radius:6px;
-    background:linear-gradient(45deg,#2de2e6,#7b2ff7);
-    color:white;
+.avatar{
+    width:55px;
+    height:55px;
+    border-radius:50%;
+    object-fit:cover;
+    border:2px solid #2de2e6;
+    background:black;
+}
+
+.user-info{
+    flex:1;
+}
+
+.user-name{
+    font-weight:bold;
+    font-size:15px;
+}
+
+.user-bio{
+    color:#aaa;
     font-size:12px;
-    cursor:pointer;
+    margin-top:4px;
 }
 
-/* EMPTY */
 .empty{
     text-align:center;
     color:#777;
-    font-size:13px;
-    padding:10px;
+    padding:15px;
 }
+
 </style>
 </head>
 
 <body>
 
-<div class="header">👥 My Buddies</div>
+<div class="header">
+    👥 My Buddies
+</div>
 
 <div class="container">
 
-    <!-- ADDED -->
-    <div class="section-title">ADDED</div>
-    <div id="following_count" class="count">Loading...</div>
+    <div class="section-title">
+        ADDED
+    </div>
+
+    <div id="following_count" class="count">
+        Loading...
+    </div>
+
     <div id="following_list"></div>
 
-    <!-- BUDDIES -->
-    <div class="section-title">Buddies</div>
-    <div id="followers_count" class="count">Loading...</div>
+    <div class="section-title">
+        BUDDIES
+    </div>
+
+    <div id="followers_count" class="count">
+        Loading...
+    </div>
+
     <div id="followers_list"></div>
 
 </div>
 
 <script>
-function loadBuddies(){
 
-    // ADDED
-    fetch("/following")
-    .then(r=>r.json())
-    .then(data=>{
-        document.getElementById("following_count").innerText = data.count + " Added"
+function createCard(u){
 
-        let list = document.getElementById("following_list")
-        list.innerHTML = ""
+    const dp =
+        u.dp ||
+        "/uploads/user_dp_pics/default_avatar.png";
 
-        if(data.users.length === 0){
-            list.innerHTML = `<div class="empty">No following yet</div>`
-        }
+    return `
 
-        data.users.forEach(u=>{
-            list.innerHTML += `
-               <div class="display:flex;align-items:center;gap:10px;">
-                    <div class="card" onclick="openProfile(${u.id})"><img src="/uploads/user_dp_pics/${u.dp}" 
-                        style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #2de2e6;margin-right:10px;">
-                       
-                    
-                    <div style="font-weight:bold;">${u.name}</div>
-                    <div style="font-size:12px;color:#aaa;">${u.bio}</div>
-                    </div>       
-                    
+        <div
+            class="card"
+            onclick="openProfile(${u.id})"
+        >
+
+            <div class="user-row">
+
+                <img
+                    class="avatar"
+                    src="${dp}"
+                    onerror="this.src='/uploads/user_dp_pics/default_avatar.png'"
+                >
+
+                <div class="user-info">
+
+                    <div class="user-name">
+                        ${u.name || "Unknown User"}
+                    </div>
+
+                    <div class="user-bio">
+                        ${u.bio || ""}
+                    </div>
+
                 </div>
 
-            `
-        })
-    })
+            </div>
 
-    // BUDDIES
-    fetch("/followers")
-    .then(r=>r.json())
-    .then(data=>{
-        document.getElementById("followers_count").innerText = data.count + " Buddies"
+        </div>
 
-        let list = document.getElementById("followers_list")
-        list.innerHTML = ""
-
-        if(data.users.length === 0){
-            list.innerHTML = `<div class="empty">No followers yet</div>`
-        }
-
-        data.users.forEach(u=>{
-            list.innerHTML += `
-               
-               <div class="display:flex;align-items:center;gap:10px;">
-                    <div class="card" onclick="openProfile(${u.id})"><img src="/uploads/user_dp_pics/${u.dp}"
-                        onerror="this.src='/uploads/user_dp_pics/default_avatar.jpeg'" 
-                        style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #2de2e6;margin-right:10px;">
-                    
-                    <div style="font-weight:bold;">${u.name}</div>
-                    <div style="font-size:12px;color:#aaa;">${u.bio}</div>
-                    </div>       
-                    
-                </div>
-            `
-        })
-    })
+    `;
 }
 
-function addBuddy(id){
-    fetch("/add_buddy",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({buddy_id:id})
+function loadFollowing(){
+
+    fetch("/following")
+
+    .then(r => r.json())
+
+    .then(data => {
+
+        document.getElementById(
+            "following_count"
+        ).innerText =
+            data.count + " Added";
+
+        const list =
+            document.getElementById(
+                "following_list"
+            );
+
+        if(!data.users || data.users.length === 0){
+
+            list.innerHTML =
+                '<div class="empty">No added users yet</div>';
+
+            return;
+        }
+
+        list.innerHTML =
+            data.users.map(createCard).join("");
+
     })
-    .then(()=>loadBuddies())
+
+    .catch(err => {
+
+        console.error(err);
+
+    });
+
+}
+
+function loadFollowers(){
+
+    fetch("/followers")
+
+    .then(r => r.json())
+
+    .then(data => {
+
+        document.getElementById(
+            "followers_count"
+        ).innerText =
+            data.count + " Buddies";
+
+        const list =
+            document.getElementById(
+                "followers_list"
+            );
+
+        if(!data.users || data.users.length === 0){
+
+            list.innerHTML =
+                '<div class="empty">No buddies yet</div>';
+
+            return;
+        }
+
+        list.innerHTML =
+            data.users.map(createCard).join("");
+
+    })
+
+    .catch(err => {
+
+        console.error(err);
+
+    });
+
 }
 
 function openProfile(id){
-    window.location.href = "/user/" + id
+
+    window.location.href =
+        "/user/" + id;
+
 }
 
-loadBuddies()
+loadFollowing();
+loadFollowers();
+
 </script>
 
 </body>
