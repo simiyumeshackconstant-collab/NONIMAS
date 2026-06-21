@@ -2593,6 +2593,32 @@ def send_message():
     )
 
     return jsonify({"success": True})
+@app.route("/delete_message", methods=["POST"])
+@login_required
+def delete_message():
+
+    data = request.get_json()
+
+    msg = ChatMessage.query.get(
+        data.get("message_id")
+    )
+
+    if not msg:
+        return jsonify({
+            "error":"Message not found"
+        }),404
+
+    if msg.sender_id != session["user_id"]:
+        return jsonify({
+            "error":"Unauthorized"
+        }),403
+
+    db.session.delete(msg)
+    db.session.commit()
+
+    return jsonify({
+        "success":True
+    })
 
 @app.route("/get_messages/<int:other_user>")
 @csrf.exempt
@@ -2641,7 +2667,8 @@ def get_messages(other_user):
             "sender": m.sender_id,
             "message": m.message,
             "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
-            "is_read": m.is_read
+            "is_read": m.is_read,
+            "id": m.id,
         }
         for m in messages
     ])

@@ -93,7 +93,9 @@ body{
 
 /* INPUT BAR */
 .inputbar{
-    position:sticky;
+    position:fixed;
+    left:0;
+    right:0;
     bottom:0;
     display:flex;
     align-items:center;
@@ -101,6 +103,13 @@ body{
     padding:8px;
     background:#202c33;
     border-top:1px solid #2f3b42;
+}
+.messages{
+    flex:1;
+    overflow-y:auto;
+    padding:10px;
+    padding-bottom:90px;
+    box-sizing:border-box;
 }
 
 #message{
@@ -227,7 +236,7 @@ async function loadMessages(){
     const box = document.getElementById("messages");
 
     box.innerHTML = "";
-
+    let presstimer;
     data.forEach(msg => {
 
         const mine =
@@ -246,12 +255,90 @@ async function loadMessages(){
         ${msg.created_at}
         </div>
         `;
+        if(mine){
+
+            div.addEventListener("touchstart",()=>{
+
+                pressTimer=setTimeout(()=>{
+
+                    if(confirm("Delete this message?")){
+
+                        deleteMessage(msg.id);
+
+                    }
+
+                },800);
+
+            });
+
+            div.addEventListener("touchend",()=>{
+                clearTimeout(pressTimer);
+            });
+
+            div.addEventListener("touchmove",()=>{
+                clearTimeout(pressTimer);
+            });
+
+            div.addEventListener("mousedown",()=>{
+
+                pressTimer=setTimeout(()=>{
+
+                    if(confirm("Delete this message?")){
+
+                        deleteMessage(msg.id);
+
+                    }
+
+                },800);
+
+            });
+
+            div.addEventListener("mouseup",()=>{
+                clearTimeout(pressTimer);
+            });
+
+            div.addEventListener("mouseleave",()=>{
+                clearTimeout(pressTimer);
+            });
+
+        }
 
         box.appendChild(div);
 
     });
 
     box.scrollTop = box.scrollHeight;
+
+}
+async function deleteMessage(messageId){
+
+    const res = await fetch(
+        "/delete_message",
+        {
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                message_id:messageId
+            })
+        }
+    );
+
+    const data = await res.json();
+
+    if(data.success){
+
+        loadMessages();
+
+    }else{
+
+        alert(
+            data.error ||
+            "Could not delete message"
+        );
+
+    }
 
 }
 
