@@ -284,6 +284,7 @@ class Buddy(db.Model):
     user_id = db.Column(db.Integer)
 
     buddy_id = db.Column(db.Integer)
+    buddy_name = db.Column(db.String(150))
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     seen = db.Column(db.Boolean, default=False)   # NEW
@@ -2217,7 +2218,7 @@ def following():
 
         "count": len(users),
 
-        "users": [{"id": u.id, "name": u.full_name, "dp": u.user_dp_pic or "default_avatar.png", "is_online": u.is_online, "last_seen": u.last_seen} for u in users]
+        "users": [{"id": u.id, "bio": u.bio, "name": u.full_name, "dp": u.user_dp_pic or "default_avatar.png", "is_online": u.is_online, "last_seen": u.last_seen} for u in users]
 
     })
 @app.route("/user_stats/<int:user_id>")
@@ -2282,6 +2283,31 @@ def buddy_count():
     return jsonify({
         "count": count
     })
+@app.route("/search_buddies", methods=["POST"])
+@login_required
+def search_buddies():
+    data = request.get_json()
+    buddy_id = data.get("buddy_id")
+    buddy_name = data.get("buddy_name", "").strip()
+
+    if not buddy_id and not buddy_name:
+        return jsonify({"error": "Buddy ID or name is required"}), 400
+
+    if buddy_id:
+        user = User.query.get(buddy_id)
+    else:
+        user = User.query.filter(User.full_name.contains(buddy_name)).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify({
+        "users": [{
+            "id": user.id,
+            "name": user.full_name,
+            "dp": user.user_dp_pic or "default_avatar.png"
+        }]
+    })
+
 @app.route("/my_buddies")
 @login_required
 def my_buddies():
@@ -2772,6 +2798,18 @@ def typing(data):
 
     socketio.emit(
         "typing",
+        {
+            "user": session["user_id"]
+        },
+        room=str(receiver)
+    )
+@socketio.on("stop_typing")
+def stop_typing(data):
+
+    receiver = data["receiver"]
+
+    socketio.emit(
+        "stop_typing",
         {
             "user": session["user_id"]
         },

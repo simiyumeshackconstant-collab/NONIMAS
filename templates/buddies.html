@@ -21,9 +21,8 @@ input{width:100%;padding:10px;margin-bottom:10px;background:#140030;border:1px s
 
         <h3 id="following_count">0 ADDED</h3>
 <button class="btn" onclick="window.location.href='/my_buddies'">My Buddies</button>
-
 <input id="buddy_id" placeholder="Enter Buddy name or ID">
-<button class="btn" onclick="addBuddy()">Add Buddy</button>
+<button class="btn" onclick="searchBuddies()">search</button>
         <div id="users_list"></div>
 
 </div>
@@ -42,29 +41,68 @@ function loadAll(){
         users_list.innerHTML=""
 
         data.users.forEach(u=>{
-            users_list.innerHTML+=`
-                <div class="card"style="display:flex;align-items:center;justify-content:space-between;">
-                    
-               <div class="display:flex;align-items:center;gap:10px;">
-                    <div class="card" onclick="openProfile(${u.id})"><img src="/uploads/user_dp_pics/${u.dp}" 
-                        style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #2de2e6;margin-right:10px;">
-                    
-                    <div style="font-weight:bold;">${u.name}</div>
-                    <div style="font-size:12px;color:#aaa;">${u.bio}</div>
-                    </div>       
-                    
-                </div>
+            users_list.innerHTML += `
+            <div class="card"
+            style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+           ">
 
-                    <button class="btn" style="width:auto;padding:6px 12px;" onclick="addBuddy(${u.id})">
-                        Add
-                    </button>
+            <div
+            onclick="openProfile(${u.id})"
+            style="
+            display:flex;
+            align-items:center;
+            gap:12px;
+            cursor:pointer;
+            flex:1;
+            ">
 
-                </div>
+            <img
+            src="${u.dp || '/static/icons/default_avatar.png'}"
+            onerror="this.src='/uploads/user_dp_pics/default_avatar.png'"
+            style="
+            width:50px;
+            height:50px;
+            border-radius:50%;
+            object-fit:cover;
+            border:2px solid #2de2e6;
+            ">
 
-            `
-        })
-    })
+            <div>
 
+            <div style="font-weight:bold;">
+            ${u.name}
+            </div>
+
+            <div style="font-size:12px;color:#aaa;">
+            ${u.bio || ''}
+            </div>
+
+            <div style="
+            font-size:12px;
+            color:${u.is_online ? '#00ff88' : '#888'};
+            ">
+            ${u.is_online ? '● Online' : 'Offline'}
+            </div>
+
+            </div>
+
+            </div>
+
+            <button
+            class="btn"
+            style="width:auto;padding:6px 12px;"
+            onclick="addBuddy(${u.id})"
+            >
+            Add
+            </button>
+
+            </div>
+            `;
+        }) 
+    })   
     // 🔹 FOLLOWING
     fetch("/following")
     .then(r=>r.json())
@@ -87,7 +125,47 @@ function addBuddy(id){
         body:JSON.stringify({buddy_id:id})
     }).then(()=>loadAll())
 }
+function searchBuddies(){
+    const buddy_id = document.getElementById("buddy_id").value.trim()
+    if(!buddy_id) return alert("Please enter a Buddy name or ID")
 
+    fetch("/search_buddies",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({buddy_id})
+    })
+    .then(r=>r.json())
+    .then(data=>{
+        if(data.error) return alert(data.error)
+
+        const users_list = document.getElementById("users_list")
+        users_list.innerHTML=""
+           
+        data.users.forEach(u=>{
+            users_list.innerHTML+=`
+                <div class="card"style="display:flex;align-items:center;justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <img 
+                        src="${u.dp || '/static/default_dp.png'}"
+                        onerror="this.src='/static/default_dp.png'"
+                        style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #2de2e6;margin-right:10px;"
+                        onclick="openProfile(${u.id})"
+                            <div style="font-weight:bold;">${u.name}</div>
+                            <div style="font-size:12px;color:#aaa;">${u.bio}</div>
+                        </div>
+                    </div>
+                    <button class="btn" style="width:auto;padding:6px 12px;" onclick="addBuddy(${u.id})">
+                        Add
+                    </button>
+                </div>
+            `
+        })
+    })
+
+}
+function openProfile(id){
+    window.location.href = `/user/${id}`
+}
 loadAll()
 </script>
 </body>

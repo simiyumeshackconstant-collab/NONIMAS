@@ -266,7 +266,7 @@ textarea{
 
     </div>
 
-    <button class="btn" onclick="createPost()">Post</button>
+    <button id="postBtn" class="btn" onclick="createPost()">Post</button>
 
     <input type="file" id="file"
         accept=".png,.jpg,.jpeg,.webp,.gif,.mp4,.webm,.mov"
@@ -288,10 +288,6 @@ textarea{
     <button class="top-btn" onclick="location.href='/notifications'">🔔 <span id="notification-badge" class="badge" style="display:none;">0</span></button>
     <button class="top-btn" onclick="location.href='/dp'">👤</button>
 </div>
-        
-</div>
-
-<div class="main">
 
 
 <!-- FEED -->
@@ -304,11 +300,8 @@ textarea{
 
 </div>
 
-</div>
-
 <script>
 loadPosts();
-let user_id = session.get('user_id', 0) | tojson;
 let draftSaved = "";
 
 function openComposer(){
@@ -341,8 +334,11 @@ function attemptClose(){
     closeComposer();
 }
 /* CREATE POST */
-
 async function createPost(){
+    const btn = 
+    document.getElementById("postBtn");
+    btn.disabled = true;
+    btn.innerText = "Posting...";
 
     let contentInput = document.getElementById("content");
     let fileInput = document.getElementById("file");
@@ -424,6 +420,8 @@ async function createPost(){
             document.getElementById(tempId)?.remove();
 
             alert(data.error || "Post failed");
+            btn.disabled = false;
+            btn.innerText = "Post";
 
             return;
         }
@@ -509,7 +507,7 @@ function loadComments(postId){
 /* ADD COMMENT */
 function addComment(postId){
 
-    let text = document.getElementById(`input-${postId}`).value;
+    let text = document.getElementById(`input-${postId}`).value.trim(); if(!text) return;
 
     fetch("/add_comment",{
         method:"POST",
@@ -542,6 +540,14 @@ async function loadPosts(){
 
     let res = await fetch("/posts");
     let data = await res.json();
+    if(data.length === 0){
+        feed.innerHTML = `
+            <div class="section-box">
+                No posts yet. Create one!
+            </div>
+        `;
+        return;
+    }
 
     let feed = document.getElementById("feed");
     feed.innerHTML = "";
@@ -583,7 +589,7 @@ async function loadPosts(){
         }
 
         // 🎁 GET TOTAL GIFTS
-        let giftCount = await getGiftCount(p.id);
+        let giftCount = p.gift-count || 0;
 
         feed.innerHTML += `
         <div class="post">
@@ -746,6 +752,34 @@ function loadUnreadMessages(){
     });
 
 }
+function loadNotificationCount(){
+
+    fetch("/notification_count")
+    .then(r=>r.json())
+    .then(data=>{
+
+        let badge =
+        document.getElementById(
+            "notification-badge"
+        );
+
+        if(data.count > 0){
+
+            badge.style.display =
+            "flex";
+
+            badge.innerText =
+            data.count;
+
+        }else{
+
+            badge.style.display =
+            "none";
+        }
+
+    });
+
+}
 function loadWalletCount(){
 
     fetch("/wallet_count")
@@ -814,11 +848,16 @@ setInterval(
     loadWalletCount,
     3000
 );
+loadNotificationCount();
+
+setInterval(
+    loadNotificationCount,
+    3000
+);
 /* refresh every 3 sec */
 setInterval(loadUnreadMessages,3000);
 
 loadUnreadMessages();
-loadPosts();
 </script>
 </body>
 </html>

@@ -215,8 +215,8 @@ body{
     >
 
         <img
-            src="/uploads/user_dp_pics/{{ u.user_dp_pic or 'default_avatar.png' }}"
             class="avatar"
+            src="{{ u.user_dp_pic if u.user_dp_pic else url_for('static', filename='icons/default_avatar.png') }}"
             onerror="this.src='/uploads/user_dp_pics/default_avatar.png'"
         >
 

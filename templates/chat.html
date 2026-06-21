@@ -71,17 +71,21 @@ body{
     color:#aaa;
     font-size:13px;
 }
-
+.badge-container{
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
 .badge{
     background:#00a884;
     color:white;
-    min-width:22px;
-    height:22px;
-    border-radius:50%;
+    min-width:15px;
+    height:12px;
+    border-radius:25%;
     display:flex;
     justify-content:center;
     align-items:center;
-    font-size:12px;
+    font-size:8px;
 }
 </style>
 </head>
@@ -99,12 +103,11 @@ Chats
 <div id="users"></div>
 
 <script>
-
+let pressTimer;
 function avatar(dp){
-    if(!dp || dp=="None" || dp=="null"){
-        dp="default_avatar.png";
-    }
-    return "/uploads/user_dp_pics/" + dp;
+    return dp && dp !== "None" && dp !== "null"
+        ? dp
+        : "/uploads/user_dp_pics/default_avatar.png";
 }
 
 async function loadUsers(){
@@ -128,6 +131,45 @@ async function loadUsers(){
         div.onclick=function(){
             window.location="/chat/" + user.id;
         };
+        div.addEventListener("touchstart",function(){
+            pressTimer=setTimeout(()=>{
+                if(confirm(
+                    `Delete conversation with ${user.name} for both users?`
+                )){
+                    clearconversation(user.id);
+                }
+            },800);
+        });
+        div.addEventListener("touchend",function(){
+            clearTimeout(pressTimer);
+        });
+
+        div.addEventListener("touchmove",function(){
+            clearTimeout(pressTimer);
+        });
+
+        div.addEventListener("mousedown",function(){
+
+            pressTimer=setTimeout(()=>{
+
+                if(confirm(
+                    `Delete conversation with ${user.name} for both users?`
+                )){
+                    clearConversation(user.id);
+                }
+
+            },800);
+
+        });
+
+        div.addEventListener("mouseup",function(){
+            clearTimeout(pressTimer);
+        });
+
+        div.addEventListener("mouseleave",function(){
+            clearTimeout(pressTimer);
+        });
+            
 
         div.innerHTML=`
             <img src="${avatar(user.dp)}"
@@ -135,13 +177,43 @@ async function loadUsers(){
 
             <div class="info">
                 <div class="name">${user.name}</div>
-                <div class="bio">${user.bio || "Tap to chat"}</div>
+                <div class="bio">
+                    ${user.bio ||""}
+                </div>
+                <div style="font-size:12px;color:${user.is_online ? '#00ff88' : '#888'};">
+                    ${user.is_online ? '● Online' : 'Offline'}
             </div>
 
-            ${count ? `<div class="badge">${count}</div>` : ""}
+            <div class="badge-container">
+                ${count ? `<div class="badge">${count}</div>` : ""}
+            </div>
         `;
 
         box.appendChild(div);
+
+    });
+
+}
+function clearConversation(otherUser){
+
+    fetch("/clear_chat_both",{
+        method:"POST",
+        headers:{
+            "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+            other_user:otherUser
+        })
+    })
+    .then(r=>r.json())
+    .then(data=>{
+
+        if(data.success){
+            alert("Conversation deleted");
+            loadUsers();
+        }else{
+            alert(data.error || "Could not delete");
+        }
 
     });
 
