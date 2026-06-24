@@ -2642,7 +2642,17 @@ def send_message():
             "success": False,
             "error": str(e)
         }), 500
+@app.route("/user_status/<int:user_id>")
+@login_required
+def user_status(user_id):
 
+    user = User.query.get_or_404(user_id)
+
+    return jsonify({
+        "online": user.is_online,
+        "last_seen": user.last_seen.strftime("%H:%M")
+        if user.last_seen else "recently"
+    })
 @app.route("/delete_message", methods=["POST"])
 @csrf.exempt
 @login_required

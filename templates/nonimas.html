@@ -252,6 +252,54 @@ textarea{
     color:#7cf7ff;
     font-weight:bold;
 }
+.apk-banner{
+
+    background:#1f0045;
+    border-bottom:1px solid #2de2e6;
+
+    padding:10px;
+
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    gap:10px;
+
+    font-size:14px;
+}
+
+.apk-actions{
+    display:flex;
+    gap:8px;
+}
+
+.apk-download{
+
+    background:#00a884;
+    color:white;
+
+    border:none;
+
+    padding:8px 12px;
+
+    border-radius:8px;
+
+    cursor:pointer;
+}
+
+.apk-close{
+
+    background:#2a3942;
+    color:white;
+
+    border:none;
+
+    padding:8px 12px;
+
+    border-radius:8px;
+
+    cursor:pointer;
+}
 
 .overlay{
     position:fixed;
@@ -265,6 +313,29 @@ textarea{
 }
 </style>
 </head>
+<div id="apkBanner" class="apk-banner">
+
+    <span>
+        📱 Get the faster Nonimas App
+    </span>
+
+    <div class="apk-actions">
+
+        <button
+            class="apk-download"
+            onclick="downloadApk()">
+            Download APK
+        </button>
+
+        <button
+            class="apk-close"
+            onclick="hideBanner()">
+            Continue Browsing
+        </button>
+
+    </div>
+
+</div>
 
 <body>
 <div id="composerModalBox" class="composer-modal">
@@ -902,6 +973,27 @@ function loadBuddyCount(){
     });
 
 }
+function hideBanner(){
+
+    document
+    .getElementById("apkBanner")
+    .style.display = "none";
+
+    localStorage.setItem(
+        "apk_banner_hidden",
+        "yes"
+    );
+
+}
+
+function downloadApk(){
+
+    hideBanner();
+
+    window.location.href =
+    "/static/downloads/nonimas.apk";
+
+}
 loadBuddyCount();
 
 setInterval(
@@ -925,6 +1017,23 @@ setInterval(loadUnreadMessages,3000);
 
 loadUnreadMessages();
 loadPosts();
+if(
+    localStorage.getItem(
+        "apk_banner_hidden"
+    ) === "yes"
+){
+
+    const banner =
+    document.getElementById(
+        "apkBanner"
+    );
+
+    if(banner){
+        banner.style.display =
+        "none";
+    }
+
+}
 </script>
 </body>
 </html>

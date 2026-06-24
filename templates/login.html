@@ -151,8 +151,79 @@ footer {
     border-top: 1px solid #2de2e6;
     color: #d4d4ff;
 }
+.apk-banner{
+
+    background:#1f0045;
+    border-bottom:1px solid #2de2e6;
+
+    padding:10px;
+
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    gap:10px;
+
+    font-size:14px;
+}
+
+.apk-actions{
+    display:flex;
+    gap:8px;
+}
+
+.apk-download{
+
+    background:#00a884;
+    color:white;
+
+    border:none;
+
+    padding:8px 12px;
+
+    border-radius:8px;
+
+    cursor:pointer;
+}
+
+.apk-close{
+
+    background:#2a3942;
+    color:white;
+
+    border:none;
+
+    padding:8px 12px;
+
+    border-radius:8px;
+
+    cursor:pointer;
+}
 </style>
 </head>
+<div id="apkBanner" class="apk-banner">
+
+    <span>
+        📱 Get the faster Nonimas App
+    </span>
+
+    <div class="apk-actions">
+
+        <button
+            class="apk-download"
+            onclick="downloadApk()">
+            Download APK
+        </button>
+
+        <button
+            class="apk-close"
+            onclick="hideBanner()">
+            Continue Browsing
+        </button>
+
+    </div>
+
+</div>
 <body>
 
 <!-- Home Button Always on Top -->
@@ -191,222 +262,49 @@ footer {
     <a href="{{ url_for('register') }}" class="btn-link">Create account</a>
 </form>
 </div>
+<script>
+function hideBanner(){
 
-<footer>
-    © 2026 {{ APP_NAME }} | All Rights Reserved
-</footer>
+    document
+    .getElementById("apkBanner")
+    .style.display = "none";
 
-</body>
-<!-- INSTALL APP CARD -->
-<div id="install-card">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-
-        <div style="display:flex;align-items:center;gap:10px;">
-            <img src="/static/nonimas_logo.png" style="width:35px;height:35px;border-radius:8px;">
-
-            <div>
-                <div style="color:#7cf7ff;font-size:14px;font-weight:bold;">
-                    Install Nonimas App
-                </div>
-                <div style="color:#ccc;font-size:12px;">
-                    Faster experience
-                </div>
-            </div>
-        </div>
-
-        <div style="display:flex;gap:8px;">
-
-            <a href="{{ url_for('static', filename='nonimas.apk') }}"
-               download
-               onclick="hideInstallCard()"
-               style="padding:6px 10px;background:#2de2e6;color:#000;border-radius:6px;font-size:12px;text-decoration:none;">
-                Install
-            </a>
-
-            <button onclick="hideInstallCard()"
-                style="padding:6px 10px;background:#0f0020;color:white;border:1px solid #2de2e6;border-radius:6px;font-size:12px;">
-                X
-            </button>
-
-        </div>
-
-    </div>
-</div>
-
-<style>
-
-#install-card{
-    position:fixed;
-    top:0;
-    left:0;
-    right:0;
-
-    display:none;
-
-    background:linear-gradient(135deg,#140030,#1f0045);
-    border-bottom:1px solid #2de2e6;
-
-    padding:8px 12px;
-    z-index:999999;
-
-    box-shadow:0 2px 10px rgba(0,0,0,0.4);
-
-    animation:slideDown 0.3s ease;
-}
-body.banner-visible{
-    padding-top:60px;
-}
-
-.install-content{
-    display:flex;
-    align-items:center;
-    gap:15px;
-}
-
-.install-logo{
-    width:55px;
-    height:55px;
-    border-radius:14px;
-}
-
-.install-text h3{
-    margin:0;
-    color:#7cf7ff;
-    font-size:17px;
-}
-
-.install-text p{
-    margin-top:4px;
-    color:#ddd;
-    font-size:13px;
-}
-
-.install-actions{
-    display:flex;
-    gap:10px;
-    margin-top:14px;
-}
-
-.install-btn{
-
-    flex:1;
-
-    text-align:center;
-
-    padding:11px;
-
-    border-radius:12px;
-
-    text-decoration:none;
-
-    font-weight:bold;
-
-    background:linear-gradient(
-        45deg,
-        #2de2e6,
-        #7b2ff7
+    localStorage.setItem(
+        "apk_banner_hidden",
+        "yes"
     );
 
-    color:white;
 }
 
-.later-btn{
+function downloadApk(){
 
-    flex:1;
+    hideBanner();
 
-    border:none;
+    window.location.href =
+    "/static/downloads/nonimas.apk";
 
-    border-radius:12px;
-
-    background:#0f0020;
-
-    color:white;
-
-    cursor:pointer;
 }
+if(
+    localStorage.getItem(
+        "apk_banner_hidden"
+    ) === "yes"
+){
 
-body.banner-visible{
-    padding-top:150px;
-}
+    const banner =
+    document.getElementById(
+        "apkBanner"
+    );
 
-@keyframes slideDown{
-
-    from{
-        transform:translateY(-100%);
-        opacity:0;
+    if(banner){
+        banner.style.display =
+        "none";
     }
 
-    to{
-        transform:translateY(0);
-        opacity:1;
-    }
 }
-
-@media(max-width:600px){
-
-    .install-actions{
-        flex-direction:column;
-    }
-
-    body.banner-visible{
-        padding-top:190px;
-    }
-}
-</style>
-
-<script>
-
-function isInstalledApp() {
-
-    const ua = navigator.userAgent || "";
-
-    // Strong indicators of WebView / APK
-    const isWebView =
-        ua.includes("wv") ||
-        ua.includes("Version/") && ua.includes("Chrome") ||
-        window.ReactNativeWebView;
-
-    // Optional: manual flag (BEST PRACTICE)
-    const forcedAppMode = localStorage.getItem("nonimas_app") === "true";
-
-    return isWebView || forcedAppMode;
-}
-function showInstallCard(){
-
-    // 🚫 NEVER SHOW INSIDE APK
-    if(isAndroidWebView()){
-        return;
-    }
-
-    const hidden = localStorage.getItem("nonimas_install_hidden");
-
-    if(hidden === "yes"){
-        return;
-    }
-
-    document.getElementById("install-card").style.display = "block";
-
-    document.body.classList.add("banner-visible");
-}
-
-function hideInstallCard(){
-
-    document.getElementById("install-card").style.display = "none";
-
-    document.body.classList.remove("banner-visible");
-
-    localStorage.setItem("nonimas_install_hidden", "yes");
-}
-
-window.addEventListener("load", ()=>{
-
-    setTimeout(()=>{
-
-        showInstallCard();
-
-    },1000);
-
-});
 </script>
 
+<footer>
+    © FROM SPACE LIO AI (meshack constant)
+</footer>
+</body>
 </html>

@@ -118,7 +118,7 @@ button{
     position:fixed;
     left:0;
     right:0;
-    bottom:0;
+    bottom:env(safe-area-insert-bottom,0);
     display:flex;
     align-items:center;
     gap:8px;
@@ -153,13 +153,12 @@ onerror="this.src='/uploads/user_dp_pics/default_avatar.png'">
     </div>
 
     <div
-        id="typingStatus"
+        id="userStatus"
         style="
         font-size:12px;
         color:#25D366;
-        display:none;
         ">
-        Typing...
+        Checking...
     </div>
 </div>
 
@@ -215,9 +214,7 @@ socket.on("stop_typing",data=>{
 
     if(data.user==otherUser){
 
-        document
-        .getElementById("typingStatus")
-        .style.display="none";
+        loadUserStatus();
 
     }
 
@@ -226,9 +223,14 @@ socket.on("typing",data=>{
 
     if(data.user==otherUser){
 
-        document
-        .getElementById("typingStatus")
-        .style.display="block";
+        const status =
+        document.getElementById("userStatus");
+
+        status.innerHTML =
+        "Typing...";
+
+        status.style.color =
+        "#25D366";
 
     }
 
@@ -318,6 +320,49 @@ async function sendMessage(){
         alert(
             "Network error"
         );
+
+    }
+
+}
+async function loadUserStatus(){
+
+    try{
+
+        const res =
+        await fetch(
+            "/user_status/" +
+            otherUser
+        );
+
+        const data =
+        await res.json();
+
+        const status =
+        document.getElementById(
+            "userStatus"
+        );
+
+        if(data.online){
+
+            status.innerHTML =
+            "● Online";
+
+            status.style.color =
+            "#25D366";
+
+        }else{
+
+            status.innerHTML =
+            "Last seen " +
+            data.last_seen;
+
+            status.style.color =
+            "#999";
+        }
+
+    }catch(err){
+
+        console.error(err);
 
     }
 
@@ -529,8 +574,39 @@ function(e){
     }
 
 });
+loadUserStatus();
+
+setInterval(
+    loadUserStatus,
+    5000
+);
 
 loadMessages();
+if(window.visualViewport){
+
+    const inputBar =
+    document.querySelector(
+        ".inputbar"
+    );
+
+    function adjustKeyboard(){
+
+        const keyboardHeight =
+        window.innerHeight -
+        window.visualViewport.height;
+
+        inputBar.style.bottom =
+        keyboardHeight + "px";
+    }
+
+    window.visualViewport
+    .addEventListener(
+        "resize",
+        adjustKeyboard
+    );
+
+    adjustKeyboard();
+}
 
 </script>
 
