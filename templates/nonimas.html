@@ -40,8 +40,8 @@ body{
 }
 
 .logo{color:#7cf7ff;font-size:20px}
-
 .top-btn{
+    position:relative;
     background:#1f0045;
     border:none;
     color:white;
@@ -53,19 +53,40 @@ body{
 .chat-btn{
     position:relative;
 }
-
 .badge{
-
     position:absolute;
 
-    top:-5px;
-    right:-5px;
+    top:-8px;
+    right:-8px;
 
     background:#41e46a;
-
     color:white;
 
     font-size:11px;
+    font-weight:bold;
+
+    min-width:18px;
+    height:18px;
+
+    border-radius:50%;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    padding:2px;
+}
+.badge{
+    position:absolute;
+
+    top:-8px;
+    right:-8px;
+
+    background:#41e46a;
+    color:white;
+
+    font-size:11px;
+    font-weight:bold;
 
     min-width:18px;
     height:18px;
@@ -302,7 +323,6 @@ textarea{
 
 <script>
 let draftSaved = "";
-
 function openComposer(){
     document.getElementById("composerModalBox").style.display = "block";
     document.getElementById("overlay").style.display = "block";
@@ -537,92 +557,140 @@ async function getGiftCount(postId){
 /* POSTS */
 async function loadPosts(){
 
-    let res = await fetch("/posts");
-    let data = await res.json();
-    if(data.length === 0){
-        feed.innerHTML = `
-            <div class="section-box">
-                No posts yet. Create one!
-            </div>
-        `;
-        return;
-    }
-
     let feed = document.getElementById("feed");
-    feed.innerHTML = "";
 
-    for (let p of data){
+    try{
 
-        let media = "";
+        let res = await fetch("/posts");
 
-        if(p.media){
+        let data = await res.json();
 
-            if(p.type === "image"){
-                media = `
-                <img src="${p.media}" style="
-                    width:100%;
-                    max-height:500px;
-                    object-fit:cover;
-                    border-radius:10px;
-                    margin-top:10px;
-                ">`;
-            }
+        if(!Array.isArray(data)){
+            console.log("Posts response:", data);
 
-            else if(p.type === "video"){
-                media = `
-                <video controls style="
-                    width:100%;
-                    border-radius:10px;
-                    margin-top:10px;
-                ">
-                    <source src="${p.media}">
-                </video>`;
-            }
-
-            else{
-                media = `
-                <a href="${p.media}" target="_blank">
-                    Download File
-                </a>`;
-            }
+            feed.innerHTML = `
+                <div class="section-box">
+                    Error loading posts
+                </div>
+            `;
+            return;
         }
 
-        // 🎁 GET TOTAL GIFTS
-        let giftCount = p.gift-count || 0;
+        if(data.length === 0){
 
-        feed.innerHTML += `
-        <div class="post">
-            <p>${p.content}</p>
-            ${media}
+            feed.innerHTML = `
+                <div class="section-box">
+                    No posts yet. Create one!
+                </div>
+            `;
 
-            <div class="actions">
+            return;
+        }
 
-                <button
-                    id="like-btn-${p.id}"
-                    class="small-btn"
-                    onclick="likePost(${p.id})">
-                    ❤️ ${p.likes}
-                </button>
+        feed.innerHTML = "";
 
-                <button id="comment-btn-${p.id}"
-                    class="small-btn"
-                    onclick="loadComments(${p.id})">
-                    💬 ${p.comments}
-                </button>
+        for(let p of data){
 
-                <button id="gift-btn-${p.id}"
-                    data-count="${giftCount}"
-                    class="small-btn"
-                    onclick="toggleGiftBox(${p.id},${p.user})">
-                    🎁 ${giftCount}
-                </button>
+            let media = "";
+
+            if(p.media){
+
+                if(p.type === "image"){
+
+                    media = `
+                    <img
+                        src="${p.media}"
+                        style="
+                            width:100%;
+                            max-height:500px;
+                            object-fit:cover;
+                            border-radius:10px;
+                            margin-top:10px;
+                        ">
+                    `;
+
+                }else if(p.type === "video"){
+
+                    media = `
+                    <video
+                        controls
+                        style="
+                            width:100%;
+                            border-radius:10px;
+                            margin-top:10px;
+                        ">
+                        <source src="${p.media}">
+                    </video>
+                    `;
+
+                }else{
+
+                    media = `
+                    <a href="${p.media}" target="_blank">
+                        Download File
+                    </a>
+                    `;
+                }
+            }
+
+            let giftCount = p.gift_count || 0;
+
+            feed.innerHTML += `
+            <div class="post">
+
+                <p>${p.content || ""}</p>
+
+                ${media}
+
+                <div class="actions">
+
+                    <button
+                        id="like-btn-${p.id}"
+                        class="small-btn"
+                        onclick="likePost(${p.id})">
+                        ❤️ ${p.likes || 0}
+                    </button>
+
+                    <button
+                        id="comment-btn-${p.id}"
+                        class="small-btn"
+                        onclick="loadComments(${p.id})">
+                        💬 ${p.comments || 0}
+                    </button>
+
+                    <button
+                        id="gift-btn-${p.id}"
+                        data-count="${giftCount}"
+                        class="small-btn"
+                        onclick="toggleGiftBox(${p.id},${p.user})">
+                        🎁 ${giftCount}
+                    </button>
+
+                </div>
+
+                <div
+                    id="gift-box-${p.id}"
+                    style="display:none;margin-top:10px;">
+                </div>
+
+                <div
+                    id="comments-${p.id}"
+                    class="comment-box">
+                </div>
 
             </div>
+            `;
+        }
 
-            <div id="gift-box-${p.id}" style="display:none;margin-top:10px;"></div>
+    }catch(err){
 
-            <div id="comments-${p.id}" class="comment-box"></div>
-        </div>`;
+        console.error("Load posts error:", err);
+
+        feed.innerHTML = `
+            <div class="section-box">
+                Failed to load posts
+            </div>
+        `;
     }
 }
 /* GIFT BOX */

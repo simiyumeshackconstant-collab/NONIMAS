@@ -2644,6 +2644,7 @@ def send_message():
         }), 500
 
 @app.route("/delete_message", methods=["POST"])
+@csrf.exempt
 @login_required
 def delete_message():
 
@@ -2848,9 +2849,12 @@ def handle_connect():
 
     if user_id:
         user = User.query.get(user_id)
+
         if user:
             user.is_online = True
+            user.last_seen = datetime.utcnow()
             db.session.commit()
+
         join_room(str(user_id))
 @socketio.on("disconnect")
 def handle_disconnect():
