@@ -657,6 +657,14 @@ def search():
 @login_required
 def search_page():
     return render_template("search.html")
+from flask import send_file
+
+@app.route("/download_apk")
+def download_apk():
+    return send_file(
+        "static/downloads/nonimas.apk",
+        as_attachment=True
+    )
 @app.route("/notification_count")
 @login_required
 def notification_count():
