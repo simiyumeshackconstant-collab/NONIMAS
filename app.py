@@ -662,7 +662,7 @@ from flask import send_file
 @app.route("/download_apk")
 def download_apk():
     return send_file(
-        "static/downloads/nonimas.apk",
+        "static/downloads/Nonimas.apk",
         as_attachment=True
     )
 @app.route("/notification_count")
@@ -2925,6 +2925,6 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port,
-        debug=True,
+        debug=False,
         allow_unsafe_werkzeug=True
     )
