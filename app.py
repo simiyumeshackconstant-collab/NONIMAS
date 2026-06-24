@@ -351,9 +351,9 @@ class UserGiftBalance(db.Model):
 class ChatMessage(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
-
+    media_url = db.Column(db.String(500))
     sender_id = db.Column(db.Integer, index=True)
-
+    media_type = db.Column(db.String(50))
     receiver_id = db.Column(db.Integer, index=True)
 
     message = db.Column(db.Text)
@@ -2563,36 +2563,86 @@ def conversation_page(user_id):
 @login_required
 def send_message():
 
-    sender_id = session["user_id"]
+    try:
 
-    data = request.get_json()
+        sender_id = session["user_id"]
 
-    receiver_id = int(data["receiver_id"])
-    text = data["message"].strip()
+        receiver_id = int(
+            request.form.get("receiver_id")
+        )
 
-    if not text:
-        return jsonify({"success": False})
+        text = request.form.get(
+            "message",
+            ""
+        ).strip()
 
-    msg = ChatMessage(
-        sender_id=sender_id,
-        receiver_id=receiver_id,
-        message=text
-    )
+        file = request.files.get("file")
 
-    db.session.add(msg)
-    db.session.commit()
-    socketio.emit(
-        "new_message",
-        {
-            "sender": sender_id,
-            "receiver": receiver_id,
-            "message": text,
-            "created_at": msg.created_at.strftime("%Y-%m-%d %H:%M")
-        },
-        room=str(receiver_id)
-    )
+        media_url = None
+        media_type = None
 
-    return jsonify({"success": True})
+        if file and file.filename:
+
+            upload = cloudinary.uploader.upload(
+                file,
+                resource_type="auto"
+            )
+
+            media_url = upload["secure_url"]
+
+            mime = file.mimetype or ""
+
+            if mime.startswith("image/"):
+                media_type = "image"
+
+            elif mime.startswith("video/"):
+                media_type = "video"
+
+            elif mime == "application/pdf":
+                media_type = "pdf"
+
+            else:
+                media_type = "doc"
+
+        if not text and not media_url:
+            return jsonify({
+                "success": False,
+                "error": "Empty message"
+            })
+
+        msg = ChatMessage(
+            sender_id=sender_id,
+            receiver_id=receiver_id,
+            message=text,
+            media_url=media_url,
+            media_type=media_type
+        )
+
+        db.session.add(msg)
+        db.session.commit()
+
+        socketio.emit(
+            "new_message",
+            {
+                "sender": sender_id,
+                "receiver": receiver_id
+            },
+            room=str(receiver_id)
+        )
+
+        return jsonify({
+            "success": True
+        })
+
+    except Exception as e:
+
+        print("SEND MESSAGE ERROR:", e)
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @app.route("/delete_message", methods=["POST"])
 @login_required
 def delete_message():
@@ -2628,9 +2678,6 @@ def get_messages(other_user):
     current_user = session["user_id"]
 
     # SECURITY CHECK
-    if current_user not in [current_user, other_user]:
-        return jsonify({"error": "Unauthorized"}), 403
-
     messages = ChatMessage.query.filter(
         (
             (ChatMessage.sender_id == current_user) &
@@ -2665,6 +2712,8 @@ def get_messages(other_user):
     return jsonify([
         {
             "sender": m.sender_id,
+            "media_url": m.media_url,
+            "media_type": m.media_type,
             "message": m.message,
             "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
             "is_read": m.is_read,
@@ -2783,17 +2832,15 @@ def unread_counts():
         "users": counts
     })
 
+from flask_socketio import join_room
+
 @socketio.on("join")
-def handle_join(data):
+def handle_join():
 
-    # get REAL logged-in user from Flask session
-    current_user = session.get("user_id")
+    user_id = session.get("user_id")
 
-    if not current_user:
-        return
-
-    # ONLY join own room
-    join_room(str(current_user))
+    if user_id:
+        join_room(str(user_id))
 @socketio.on("connect")
 def handle_connect():
 
