@@ -18,10 +18,6 @@ body{
     font-family:Arial,sans-serif;
     background:#111b21;
     color:white;
-}
-
-
-body{
     display:flex;
     flex-direction:column;
 }
@@ -37,6 +33,9 @@ body{
     padding:0 15px;
     box-sizing:border-box;
     flex-shrink:0;
+    position:sticky;
+    top:0;
+    z-index:100;
 }
 
 .back{
@@ -126,6 +125,13 @@ button{
     padding:8px;
     background:#202c33;
     border-top:1px solid #2f3b42;
+}
+.messages{
+    flex:1;
+    overflow-y:auto;
+    padding:10px;
+    padding-bottom:140px;
+    box-sizing:border-box;
 }
 </style>
 </head>
