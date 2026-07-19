@@ -1582,7 +1582,7 @@ def deposit():
             return redirect(url_for("deposit"))
 
         headers = {
-            "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+            "Authorization": f"Bearer {PAYPAL_SECRET_KEY}",
             "Content-Type": "application/json"
         }
 
@@ -1590,11 +1590,11 @@ def deposit():
             "email": user.email,
             "amount": int(amount * 100),   # USD cents
             "currency": "USD",
-            "callback_url": os.environ.get("PAYSTACK_CALLBACK_URL")
+            "callback_url": os.environ.get("PAYPAL_CALLBACK_URL")
         }
 
         response = requests.post(
-            "https://api.paystack.co/transaction/initialize",
+            "https://api.paypal.com/v1/checkout/orders",
             json=payload,
             headers=headers
         )
@@ -1637,11 +1637,11 @@ def verify_deposit():
         return redirect(url_for("deposit"))
 
     headers = {
-        "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"
+        "Authorization": f"Bearer {PAYPAL_SECRET_KEY}"
     }
 
     response = requests.get(
-        f"https://api.paystack.co/transaction/verify/{reference}",
+        f"https://api.paypal.com/v1/checkout/orders/{reference}",
         headers=headers
     )
 
