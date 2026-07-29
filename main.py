@@ -28,18 +28,12 @@ from models import (
     Earning,
     LIKE_EARN,
     COMMENT_EARN,
-    MILESTONE_EARN,
     Wallet,
-    Milestone,
     DepositTransaction,
     WithdrawalRequest,
-    WithdrawalTransaction,
-    BuddyMilestone,
     ChatMessage,
-    ChatRoom,
     Gift,
     GiftTransaction,
-    GiftTransactionItem,
     Notification,
     UserGiftBalance
 
@@ -651,16 +645,15 @@ def user_profile_api(user_id):
 # USER POSTS
 # ==========================================================
 
-@app.get("/api/profile/<int:user_id>/posts")
+@app.get("/api/profile/<int:user_id>/userposts")
 @jwt_required()
-def user_posts_api(user_id):
+def userposts_api(user_id):
 
     posts = Post.query.filter_by(
         user_id=user_id
     ).order_by(
         Post.created_at.desc()
     ).all()
-
 
     return success_response(
         "Posts loaded",
@@ -1364,9 +1357,9 @@ def buddies_page_api():
 # MY FOLLOWERS
 # ==========================================================
 
-@app.get("/api/buddies/followers")
+@app.get("/api/buddies/myfollowers")
 @jwt_required()
-def followers_api():
+def myfollowers_api():
 
     user_id = int(
         get_jwt_identity()
@@ -1406,9 +1399,9 @@ def followers_api():
 # USER FOLLOWERS
 # ==========================================================
 
-@app.get("/api/buddies/<int:user_id>/followers")
+@app.get("/api/buddies/<int:user_id>/userfollowers")
 @jwt_required()
-def user_followers_api(user_id):
+def userfollowers_api(user_id):
 
     followers = Buddy.query.filter_by(
         buddy_id=user_id
@@ -1441,9 +1434,9 @@ def user_followers_api(user_id):
 # USER FOLLOWING
 # ==========================================================
 
-@app.get("/api/buddies/<int:user_id>/following")
+@app.get("/api/buddies/<int:user_id>/userfollowing")
 @jwt_required()
-def user_following_api(user_id):
+def userfollowing_api(user_id):
 
     buddies = Buddy.query.filter_by(
         user_id=user_id
@@ -1584,9 +1577,9 @@ def users_to_add_api():
 # MY FOLLOWING
 # ==========================================================
 
-@app.get("/api/buddies/following")
+@app.get("/api/buddies/myfollowing")
 @jwt_required()
-def following_api():
+def myfollowing_api():
 
     user_id = int(
         get_jwt_identity()
@@ -1660,7 +1653,7 @@ def user_stats_api(user_id):
 
 @app.get("/api/buddies/<int:user_id>/info")
 @jwt_required()
-def user_info_api(user_id):
+def userinfo_api(user_id):
 
     user = User.query.get(user_id)
 
