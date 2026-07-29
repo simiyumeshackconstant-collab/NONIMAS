@@ -1,582 +1,94 @@
 from flask import (
-
     Flask, render_template, request, redirect,
-
     url_for, flash, jsonify, session, send_from_directory 
 )
-
-from flask_migrate import Migrate
-
+from extensions import db, migrate, socketio
 from werkzeug.security import generate_password_hash, check_password_hash
-
 from werkzeug.utils import secure_filename
-
 from functools import wraps
-
 from datetime import datetime, timedelta
-
 from dotenv import load_dotenv
-
 load_dotenv()
 import os
-
 from sqlalchemy import text
 from werkzeug.exceptions import RequestEntityTooLarge
-from flask_sqlalchemy import SQLAlchemy
-
-import mimetypes
 import random
-import string
-import uuid
-import smtplib
-import requests
+import string, uuid, mimetypes, os, cloudinary
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 from email.mime.text import MIMEText
-import cloudinary
 import cloudinary.uploader
-
 cloudinary.config(
     cloud_name=os.environ.get("CLOUDINARY_NAME"),
     api_key=os.environ.get("CLOUDINARY_KEY"),
     api_secret=os.environ.get("CLOUDINARY_SECRET")
 )
-PAYSTACK_PUBLIC_KEY = os.environ.get("PAYSTACK_PUBLIC_KEY")
-PAYSTACK_SECRET_KEY = os.environ.get("PAYSTACK_SECRET_KEY")
 
-# ----------------- App Setup --------------
+from config import config
 from flask_wtf.csrf import CSRFProtect
+
+# ----------------- App Setup -----------------
+
 app = Flask(__name__)
+app.config.from_object(config["production"])
+
 csrf = CSRFProtect(app)
-# ----------------- STATIC -----------------
 
-STATIC_FOLDER = os.path.join(BASE_DIR, "static")
+db.init_app(app)
+migrate.init_app(app, db)
 
-# App icons/images
-APP_ICON_FOLDER = os.path.join(STATIC_FOLDER, "icons")
-
-# ----------------- UPLOADS -----------------
-
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-
-# User posts
-POST_UPLOAD_FOLDER = os.path.join(
-    UPLOAD_FOLDER,
-    "posts"
-)
-
-# User profile pictures
-DP_UPLOAD_FOLDER = os.path.join(
-    UPLOAD_FOLDER,
-    "user_dp_pics"
-)
-
-# Create folders if missing
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(POST_UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(DP_UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(APP_ICON_FOLDER, exist_ok=True)
-
-# Flask config
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.config["POST_UPLOAD_FOLDER"] = POST_UPLOAD_FOLDER
-app.config["DP_UPLOAD_FOLDER"] = DP_UPLOAD_FOLDER
-app.config["APP_ICON_FOLDER"] = APP_ICON_FOLDER
-
-# THEN initialize socketio AFTER app exists
-from flask_socketio import SocketIO, join_room, leave_room, emit
-socketio = SocketIO(
+socketio.init_app(
     app,
     cors_allowed_origins="*",
     async_mode="threading",
     manage_session=False
 )
-
-
-app.secret_key = os.environ.get("SECRET_KEY")
-
-if not app.secret_key:
-    raise ValueError("SECRET_KEY environment variable is required")
-
-app.config["APP_NAME"] = "Nonimas"
-
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
-# ----------------- Database -----------------
-
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-
-if DATABASE_URL:
-
-    # Fix old postgres:// bug
-
-    if DATABASE_URL.startswith("postgres://"):
-
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-
-    app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
-
-else:
-
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///local.db"
-
-# Recommended for remote Postgres (Render)
-
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-
-    "pool_pre_ping": True,       # Checks if connection is alive before using
-
-    "pool_recycle": 280,         # Recycle connections older than 280s
-
-    "pool_size": 5,              # Number of connections in the pool
-
-    "max_overflow": 10            # Extra connections allowed
-
-}
-
-
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-
-db = SQLAlchemy(app)
-
-migrate = Migrate(app, db)
-LIKE_EARN = 0.001
-COMMENT_EARN = 0.0025
-
-
-#-------------------- File Upload Setup ----------------
-ALLOWED_DP_EXTENSIONS = {
-    "png",
-    "jpg",
-    "jpeg",
-    "webp"
-}
-
-def allowed_file(filename):
-    return (
-        "." in filename and
-        filename.rsplit(".", 1)[1].lower()
-        in ALLOWED_DP_EXTENSIONS
-    )
-#------------------- Routes for Uploaded Files -----------------
-
-@app.route("/uploads/posts/<path:filename>")
-def uploaded_post_file(filename):
-
-    return send_from_directory(
-        app.config["POST_UPLOAD_FOLDER"],
-        filename,
-        as_attachment=False
-    )
-
-@app.route("/uploads/user_dp_pics/<path:filename>")
-def uploaded_dp_file(filename):
-
-    return send_from_directory(
-        app.config["DP_UPLOAD_FOLDER"],
-        filename
-    )
-
-@app.errorhandler(RequestEntityTooLarge)
-def handle_large_file(e):
-
-    return jsonify({
-        "error": "File too large"
-    }), 413
-# ---------------- MODELS ----------------
-
-class User(db.Model):
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    full_name = db.Column(db.String(150), nullable=False)
-
-    phone = db.Column(db.String(20), unique=True, nullable=False)
-
-    password = db.Column(db.String(255), nullable=False)
-
-    id_number = db.Column(db.String(50), nullable=True)
-    is_online = db.Column(db.Boolean, default=False)
-    last_seen = db.Column(db.DateTime)
-    balance = db.Column(db.Float, default=0.0)  # USD now
-
-
-    is_admin = db.Column(db.Boolean, default=False)
-
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-
-    email = db.Column(db.String(120), unique=True, nullable=True)
-
-    country = db.Column(db.String(100), nullable=True)
-
-    otp_code = db.Column(db.String(6), nullable=True)
-
-    otp_expiry = db.Column(db.DateTime, nullable=True)
-
-    is_verified = db.Column(db.Boolean, default=False)
-
-
-
-    user_dp_pic = db.Column(db.String(255), nullable=True)
-
-    bio = db.Column(db.String(255), default="")
-class Notification(db.Model):
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer)
-
-    title = db.Column(db.String(255))
-
-    message = db.Column(db.Text)
-
-    is_read = db.Column(
-        db.Boolean,
-        default=False
-    )
-
-    created_at = db.Column(
-        db.DateTime,
-        default=datetime.utcnow
-    )
-class Gift(db.Model):
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    name = db.Column(db.String(50))
-    value = db.Column(db.Float)  # internal value for payout calculations
-    price = db.Column(db.Float)
-    payout = db.Column(db.Float)
-    icon = db.Column(db.String(255))
-
-class Like(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer, nullable=False)
-    post_id = db.Column(db.Integer, nullable=False)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    is_active = db.Column(db.Boolean, default=True)
-
-    rewarded = db.Column(db.Boolean, default=False)
-class Post(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer, nullable=False)
-
-    anon_name = db.Column(db.String(100))
-
-    content = db.Column(db.Text)
-
-    media_url = db.Column(db.String(255))
-
-    media_type = db.Column(db.String(20))
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-class Buddy(db.Model):
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer)
-
-    buddy_id = db.Column(db.Integer)
-    buddy_name = db.Column(db.String(150))
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    seen = db.Column(db.Boolean, default=False)   # NEW
-    user_dp_pic = db.Column(
-        db.String(255),
-        default='default_avatar.png'
-    )
-
-    bio = db.Column(
-        db.String(255),
-        default=""
-    )
-
-class Wallet(db.Model):
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer, unique=True)
-
-    balance = db.Column(db.Float, default=0.0)
-
-
-
-class Earning(db.Model):
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer)
-
-    amount = db.Column(db.Float)
-
-    status = db.Column(db.String(20), default="pending")
-    seen = db.Column(db.Boolean, default=False)   # NEW
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-
-class GiftTransaction(db.Model):
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    sender_id = db.Column(db.Integer)
-
-    receiver_id = db.Column(db.Integer)
-
-    post_id = db.Column(db.Integer)
-
-    gift_id = db.Column(db.Integer)
-
-    quantity = db.Column(db.Integer, default=1)
-
-    total_amount = db.Column(db.Float)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-class UserGiftBalance(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer, nullable=False)
-    gift_id = db.Column(db.Integer, nullable=False)
-
-    quantity = db.Column(db.Integer, default=0)
-
-class ChatMessage(db.Model):
-
-    id = db.Column(db.Integer, primary_key=True)
-    media_url = db.Column(db.String(500))
-    sender_id = db.Column(db.Integer, index=True)
-    media_type = db.Column(db.String(50))
-    receiver_id = db.Column(db.Integer, index=True)
-
-    message = db.Column(db.Text)
-    is_read = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-class Comment(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer, nullable=False)
-    post_id = db.Column(db.Integer, nullable=False)
-
-    comment = db.Column(db.Text, nullable=False)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-class DepositTransaction(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer, nullable=False)
-
-    paystack_reference = db.Column(
-        db.String(100),
-        unique=True,
-        nullable=False
-    )
-
-    amount = db.Column(db.Float, nullable=False)   # USD
-
-    status = db.Column(
-        db.String(20),
-        default="pending"
-    )
-
-    created_at = db.Column(
-        db.DateTime,
-        default=datetime.utcnow
-    )
-class WithdrawalRequest(db.Model):
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer, nullable=False)
-
-    amount = db.Column(db.Float, nullable=False)
-
-    account_name = db.Column(db.String(150))
-
-    bank_name = db.Column(db.String(150))
-
-    account_number = db.Column(db.String(100))
-
-    status = db.Column(
-        db.String(20),
-        default="pending"
-    )  # pending, approved, rejected
-
-    created_at = db.Column(
-        db.DateTime,
-        default=datetime.utcnow
-    )
-
-    processed_at = db.Column(
-        db.DateTime,
-        nullable=True
-    )
-#----------------- HELPERS ----------------
-
-from werkzeug.security import generate_password_hash, check_password_hash
-
-def login_required(f):
-
-    @wraps(f)
-
-    def wrapper(*args, **kwargs):
-
-        if "user_id" not in session:
-
-            flash("Please log in first.", "error")
-
-            return redirect(url_for("login"))
-
-        return f(*args, **kwargs)
-
-    return wrapper
-def create_buddy_milestone(user_id):
-
-    total = Buddy.query.filter_by(
-        buddy_id=user_id
-    ).count()
-
-    milestones = [
-        100,
-        500,
-        1000,
-        5000
-    ]
-
-    if total in milestones:
-
-        notification = Notification(
-            user_id=user_id,
-            title="Buddy Milestone",
-            message=f"Congratulations! You reached {total} buddies."
-        )
-
-        db.session.add(notification)
-
-def admin_required(f):
-
-    @wraps(f)
-
-    def wrapper(*args, **kwargs):
-
-        if not session.get("user_id"):
-
-            flash("Please log in first")
-
-            return redirect(url_for("login"))
-
-        if not session.get("is_admin"):
-
-            flash("Admin access only")
-
-            return redirect(url_for("nonimas"))
-
-        return f(*args, **kwargs)
-
-    return wrapper
-def add_to_wallet(user_id, amount):
-    wallet = Wallet.query.filter_by(user_id=user_id).first()
-
-    if not wallet:
-        wallet = Wallet(user_id=user_id, balance=0.0)
-        db.session.add(wallet)
-
-    wallet.balance += amount
-
-def generate_otp():
-
-    return ''.join(random.choices(string.digits, k=6))
-def send_otp_email(to_email, otp):
-    """
-    Send OTP email using Brevo API
-    """
-
-    api_key = os.environ.get("BREVO_API_KEY")
-
-    if not api_key:
-        raise Exception("BREVO_API_KEY not found")
-
-    headers = {
-        "accept": "application/json",
-        "api-key": api_key,
-        "content-type": "application/json"
-    }
-
-    payload = {
-        "sender": {
-            "name": "Nonimas",
-            "email": "nonimas@spacelioai.site"
-        },
-        "to": [
-            {
-                "email": to_email
-            }
-        ],
-        "subject": "Your OTP Code",
-        "htmlContent": f"""
-        <html>
-            <body>
-                <h2>Nonimas Verification</h2>
-                <p>Your OTP code is:</p>
-                <h1>{otp}</h1>
-                <p>This code expires in 5 minutes.</p>
-            </body>
-        </html>
-        """
-    }
-
-    response = requests.post(
-        "https://api.brevo.com/v3/smtp/email",
-        headers=headers,
-        json=payload,
-        timeout=30
-    )
-
-    print("=" * 60)
-    print("BREVO STATUS:", response.status_code)
-    print("BREVO RESPONSE:", response.text)
-    print("=" * 60)
-
-    response.raise_for_status()
-
-    return True
-def seed_gifts():
-    gifts = [
-        {"name": "Caros", "value": 0.1, "price": 0.1, "payout": 0.07},
-        {"name": "Cons", "value": 1.0, "price": 1.0, "payout": 0.8},
-        {"name": "Preshas", "value": 5.0, "price": 5.0, "payout": 4.6},
-        {"name": "Stacs", "value": 10.0, "price": 10.0, "payout": 9.5},
-        {"name": "Poulets", "value": 25.0, "price": 25.0, "payout": 24},
-    ]
-
-    for g in gifts:
-        if not Gift.query.filter_by(name=g["name"]).first():
-            db.session.add(Gift(**g))
-
-    db.session.commit()
-
+# ----------------- STATIC -----------------
+STATIC_FOLDER = os.path.join(BASE_DIR, "static")
+# App icons/images
+APP_ICON_FOLDER = os.path.join(STATIC_FOLDER, "icons")
+
+#------------------ MODELS -----------------
+from models import (
+    User,
+    Notification,
+    Gift,
+    Like,
+    Post,
+    Buddy,
+    Wallet,
+    Earning,
+    GiftTransaction,
+    UserGiftBalance,
+    ChatMessage,
+    Comment,
+    DepositTransaction,
+    WithdrawalRequest,
+    LIKE_EARN,
+    COMMENT_EARN,
+)
+from helpers import (
+    login_required,
+    admin_required,
+    add_to_wallet,
+    generate_otp,
+    send_otp_email,
+    create_buddy_milestone,
+    seed_gifts,
+    hash_password,
+    verify_password,
+    success_response,
+    error_response,
+    allowed_file
+)
 # ---------------- ROUTES ----------------
-
 @app.route("/")
 @login_required
 def nonimas():
-
     if not session.get("is_admin") and not session.get("user_id"):
-
         flash("Please log in first.", "error")
-
         return redirect(url_for("login"))
-
     return render_template("nonimas.html")
-
-
 # -------- ACTIONS --------
 @app.route("/search")
 @csrf.exempt
@@ -1544,154 +1056,297 @@ def earnings():
         for e in rows
     ])
 
+
+# ==========================================================
+# PAYPAL HELPERS
+# ==========================================================
+
+import base64
+import requests
+
+PAYPAL_BASE_URL = (
+    "https://api-m.sandbox.paypal.com"
+    if app.config["PAYPAL_MODE"] == "sandbox"
+    else "https://api-m.paypal.com"
+)
+
+
+def paypal_access_token():
+
+    credentials = (
+        f'{app.config["PAYPAL_CLIENT_ID"]}:'
+        f'{app.config["PAYPAL_CLIENT_SECRET"]}'
+    )
+
+    encoded = base64.b64encode(
+        credentials.encode()
+    ).decode()
+
+    response = requests.post(
+        f"{PAYPAL_BASE_URL}/v1/oauth2/token",
+        headers={
+            "Authorization": f"Basic {encoded}",
+            "Accept": "application/json",
+            "Accept-Language": "en_US"
+        },
+        data={
+            "grant_type": "client_credentials"
+        },
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    return response.json()["access_token"]
+
+
+# ==========================================================
+# DEPOSIT
+# ==========================================================
+
 @app.route("/deposit", methods=["GET", "POST"])
 @csrf.exempt
 @login_required
 def deposit():
 
-    user_id = session["user_id"]
+    user_id = int(
+        get_jwt_identity()
+    )
 
-    wallet = Wallet.query.filter_by(user_id=user_id).first()
+    data = request.get_json(
+        silent=True
+    )
 
-    # Create wallet if missing
-    if not wallet:
-        wallet = Wallet(
-            user_id=user_id,
-            balance=0.0
+    if not data:
+        return error_response(
+            "Invalid request"
         )
-        db.session.add(wallet)
-        db.session.commit()
 
-    if request.method == "POST":
+    try:
 
-        try:
-            amount = float(request.form.get("amount", 0))
+        amount = float(
+            data.get("amount", 0)
+        )
 
-            if amount <= 0:
-                flash("Please enter a valid amount.")
-                return redirect(url_for("deposit"))
+    except Exception:
 
-        except:
-            flash("Invalid amount.")
-            return redirect(url_for("deposit"))
+        return error_response(
+            "Invalid amount"
+        )
 
-        user = User.query.get(user_id)
+    if amount <= 0:
+        return error_response(
+            "Amount must be greater than zero."
+        )
 
-        if not user or not user.email:
-            flash("Please add an email address before depositing.")
-            return redirect(url_for("deposit"))
+    user = User.query.get(user_id)
 
-        headers = {
-            "Authorization": f"Bearer {PAYPAL_SECRET_KEY}",
+    if not user:
+        return error_response(
+            "User not found",
+            404
+        )
+
+    token = paypal_access_token()
+
+    payload = {
+
+        "intent": "CAPTURE",
+
+        "purchase_units": [
+            {
+                "amount": {
+                    "currency_code": "USD",
+                    "value": f"{amount:.2f}"
+                }
+            }
+        ]
+
+    }
+
+    response = requests.post(
+
+        f"{PAYPAL_BASE_URL}/v2/checkout/orders",
+
+        headers={
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
-        }
+        },
 
-        payload = {
-            "email": user.email,
-            "amount": int(amount * 100),   # USD cents
-            "currency": "USD",
-            "callback_url": os.environ.get("PAYPAL_CALLBACK_URL")
-        }
+        json=payload,
 
-        response = requests.post(
-            "https://api.paypal.com/v1/checkout/orders",
-            json=payload,
-            headers=headers
+        timeout=30
+
+    )
+
+    if response.status_code not in (
+        200,
+        201
+    ):
+
+        return error_response(
+            "Unable to create PayPal order",
+            500
         )
 
-        result = response.json()
+    order = response.json()
 
-        if not result.get("status"):
-            flash(result.get("message", "Unable to initialize payment."))
-            return redirect(url_for("deposit"))
+    approval_url = None
 
-        reference = result["data"]["reference"]
+    for link in order.get(
+        "links",
+        []
+    ):
 
-        tx = DepositTransaction(
-            user_id=user_id,
-            amount=amount,
-            paystack_reference=reference,
-            status="pending"
-        )
+        if link["rel"] == "approve":
 
-        db.session.add(tx)
-        db.session.commit()
+            approval_url = link["href"]
 
-        return redirect(
-            result["data"]["authorization_url"]
-        )
+            break
+
+    transaction = DepositTransaction(
+
+        user_id=user_id,
+
+        amount=amount,
+
+        paypal_order_id=order["id"],
+
+        status="pending"
+
+    )
+
+    db.session.add(
+        transaction
+    )
+
+    db.session.commit()
 
     return render_template(
         "deposit.html",
         wallet=wallet
     )
+# ==========================================================
+# VERIFY PAYPAL DEPOSIT
+# ==========================================================
+
 @app.route("/verify_deposit")
 @csrf.exempt
 @login_required
 def verify_deposit():
-
-    reference = request.args.get("reference")
-
-    if not reference:
-        flash("Invalid payment reference.")
-        return redirect(url_for("deposit"))
-
-    headers = {
-        "Authorization": f"Bearer {PAYPAL_SECRET_KEY}"
-    }
-
-    response = requests.get(
-        f"https://api.paypal.com/v1/checkout/orders/{reference}",
-        headers=headers
+    user_id = int(
+        get_jwt_identity()
     )
 
-    result = response.json()
+    data = request.get_json(
+        silent=True
+    )
 
-    if not result.get("status"):
-        flash(result.get("message", "Payment verification failed."))
-        return redirect(url_for("deposit"))
+    if not data:
+        return error_response(
+            "Invalid request"
+        )
 
-    payment = result["data"]
+    order_id = data.get(
+        "order_id"
+    )
 
-    # Payment not successful
-    if payment["status"] != "success":
-        flash(payment.get("message", "Payment was not successful."))
-        return redirect(url_for("deposit"))
+    if not order_id:
+        return error_response(
+            "Order ID is required"
+        )
 
-    # Find stored transaction
-    tx = DepositTransaction.query.filter_by(
-        paystack_reference=reference
+    transaction = DepositTransaction.query.filter_by(
+        paypal_order_id=order_id
     ).first()
 
-    if not tx:
-        flash("Transaction not found.")
-        return redirect(url_for("deposit"))
+    if not transaction:
 
-    # Prevent duplicate wallet credits
-    if tx.status == "success":
-        flash("Deposit already processed.")
-        return redirect(url_for("wallet_page"))
+        return error_response(
+            "Transaction not found",
+            404
+        )
+
+    if transaction.user_id != user_id:
+
+        return error_response(
+            "Unauthorized",
+            403
+        )
+
+    if transaction.status == "success":
+
+        wallet = Wallet.query.filter_by(
+            user_id=user_id
+        ).first()
+
+        return success_response(
+            "Deposit already processed",
+            {
+                "balance": (
+                    wallet.balance
+                    if wallet
+                    else 0.0
+                )
+            }
+        )
+
+    token = paypal_access_token()
+
+    response = requests.post(
+
+        f"{PAYPAL_BASE_URL}/v2/checkout/orders/{order_id}/capture",
+
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        },
+
+        timeout=30
+
+    )
+
+    if response.status_code not in (
+        200,
+        201
+    ):
+
+        try:
+            message = response.json()
+        except Exception:
+            message = response.text
+
+        return error_response(
+            f"PayPal capture failed: {message}",
+            400
+        )
+
+    capture = response.json()
+
+    if capture.get("status") != "COMPLETED":
+
+        return error_response(
+            "Payment not completed."
+        )
 
     wallet = Wallet.query.filter_by(
-        user_id=tx.user_id
+        user_id=user_id
     ).first()
 
     if not wallet:
+
         wallet = Wallet(
-            user_id=tx.user_id,
+            user_id=user_id,
             balance=0.0
         )
+
         db.session.add(wallet)
 
-    # Credit wallet
-    wallet.balance += tx.amount
+    wallet.balance += transaction.amount
 
-    # Mark transaction completed
-    tx.status = "success"
+    transaction.status = "success"
 
     db.session.commit()
-
-    flash(f"${tx.amount:.2f} deposited successfully!")
 
     return redirect(url_for("wallet_page"))
 @app.route("/withdraw")
