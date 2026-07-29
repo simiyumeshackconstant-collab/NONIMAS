@@ -332,7 +332,7 @@ body{
                     <div class="actions">
 
                         <form method="POST"
-                              action="{{ url_for('approve_withdrawal', id=w.id) }}">
+                              action="{{ url_for('web.approve_withdrawal', id=w.id) }}">
 
                             <button class="approve-btn">
                                 Approve & Mark Paid
@@ -345,7 +345,7 @@ body{
                     <div class="reason-box">
 
                         <form method="POST"
-                              action="{{ url_for('reject_withdrawal', id=w.id) }}">
+                              action="{{ url_for('web.reject_withdrawal', id=w.id) }}">
 
                             <input
                                 type="text"

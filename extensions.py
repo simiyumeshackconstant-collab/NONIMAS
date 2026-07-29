@@ -3,20 +3,42 @@ from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
+from flask_wtf.csrf import CSRFProtect
 
-# Database
+# ==========================================================
+# DATABASE
+# ==========================================================
+
 db = SQLAlchemy()
 
-# Database migrations
+# ==========================================================
+# DATABASE MIGRATIONS
+# ==========================================================
+
 migrate = Migrate()
 
-# JWT Authentication (Android)
+# ==========================================================
+# JWT AUTHENTICATION (ANDROID API)
+# ==========================================================
+
 jwt = JWTManager()
 
-# CORS (Android API)
+# ==========================================================
+# CORS
+# ==========================================================
+
 cors = CORS()
 
-# Socket.IO (Website Chat)
+# ==========================================================
+# CSRF PROTECTION (WEBSITE)
+# ==========================================================
+
+csrf = CSRFProtect()
+
+# ==========================================================
+# SOCKET.IO
+# ==========================================================
+
 socketio = SocketIO(
     cors_allowed_origins="*",
     async_mode="threading",

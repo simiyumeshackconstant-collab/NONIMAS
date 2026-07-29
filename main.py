@@ -1,22 +1,26 @@
 from datetime import datetime, timedelta
-from flask import Flask, request
+from decimal import Decimal
+import uuid
+import os
+
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import (
-    JWTManager,
     create_access_token,
     create_refresh_token,
     jwt_required,
     get_jwt_identity
 )
+
 import cloudinary
 import cloudinary.uploader
+
 from werkzeug.utils import secure_filename
-from config import Config
+from werkzeug.security import generate_password_hash
+
 from extensions import (
     db,
-    migrate,
-    jwt,
-    cors,
-    socketio
+    socketio,
+    jwt
 )
 
 from models import (
@@ -36,8 +40,8 @@ from models import (
     GiftTransaction,
     Notification,
     UserGiftBalance
-
 )
+
 from helpers import (
     generate_otp,
     send_otp_email,
@@ -48,40 +52,22 @@ from helpers import (
     add_to_wallet,
     create_buddy_milestone
 )
+
 from flask_socketio import (
     join_room,
     disconnect
 )
-from decimal import Decimal
-import uuid
-import os
-from werkzeug.security import generate_password_hash
 
+# ==========================================================
+# ANDROID API BLUEPRINT
+# ==========================================================
 
-app = Flask(__name__)
+api_bp = Blueprint("api", __name__)
 
-app.config.from_object(Config)
-
-db.init_app(app)
-migrate.init_app(app, db)
-jwt.init_app(app)
-cors.init_app(
-    app,
-    resources={
-        r"/api/*": {
-            "origins": "*"
-        }
-    }
-)
-socketio.init_app(app)
-cloudinary.config(
-    cloud_name=app.config["CLOUDINARY_NAME"],
-    api_key=app.config["CLOUDINARY_KEY"],
-    api_secret=app.config["CLOUDINARY_SECRET"],
-    secure=True
-)
-
-@app.route("/")
+# ==========================================================
+# ROUTES START BELOW
+# ==========================================================
+@api_bp.route("/")
 def index():
     return {
         "success": True,
@@ -94,7 +80,7 @@ def index():
 # AUTH
 # ==========================================================
 
-@app.post("/api/auth/register")
+@api_bp.post("/api/auth/register")
 def register():
 
     data = request.get_json(silent=True)
@@ -182,7 +168,7 @@ def register():
     )
 
 
-@app.post("/api/auth/login")
+@api_bp.post("/api/auth/login")
 def login():
 
     data = request.get_json(silent=True)
@@ -274,7 +260,7 @@ def login():
     )
 
 
-@app.post("/api/auth/verify-account")
+@api_bp.post("/api/auth/verify-account")
 def verify_account():
 
     data = request.get_json(silent=True)
@@ -343,7 +329,7 @@ def verify_account():
     )
 
 
-@app.post("/api/auth/resend-otp")
+@api_bp.post("/api/auth/resend-otp")
 def resend_otp():
 
     data = request.get_json(silent=True)
@@ -392,7 +378,7 @@ def resend_otp():
     )
 
 
-@app.get("/api/auth/me")
+@api_bp.get("/api/auth/me")
 @jwt_required()
 def me():
 
@@ -422,7 +408,7 @@ def me():
     )
 
 
-@app.post("/api/auth/logout")
+@api_bp.post("/api/auth/logout")
 @jwt_required()
 def logout():
 
@@ -477,7 +463,7 @@ def revoked_token_callback(jwt_header, jwt_payload):
 # API ERROR HANDLERS
 # ==========================================================
 
-@app.errorhandler(400)
+@api_bp.errorhandler(400)
 def bad_request(error):
     return error_response(
         "Bad request",
@@ -485,7 +471,7 @@ def bad_request(error):
     )
 
 
-@app.errorhandler(401)
+@api_bp.errorhandler(401)
 def unauthorized(error):
     return error_response(
         "Unauthorized",
@@ -493,7 +479,7 @@ def unauthorized(error):
     )
 
 
-@app.errorhandler(403)
+@api_bp.errorhandler(403)
 def forbidden(error):
     return error_response(
         "Forbidden",
@@ -501,7 +487,7 @@ def forbidden(error):
     )
 
 
-@app.errorhandler(404)
+@api_bp.errorhandler(404)
 def not_found(error):
     return error_response(
         "Resource not found",
@@ -509,7 +495,7 @@ def not_found(error):
     )
 
 
-@app.errorhandler(405)
+@api_bp.errorhandler(405)
 def method_not_allowed(error):
     return error_response(
         "Method not allowed",
@@ -517,7 +503,7 @@ def method_not_allowed(error):
     )
 
 
-@app.errorhandler(500)
+@api_bp.errorhandler(500)
 def internal_server_error(error):
     db.session.rollback()
 
@@ -529,7 +515,7 @@ def internal_server_error(error):
 # MY PROFILE / UPDATE DP
 # ==========================================================
 
-@app.route("/api/profile/me", methods=["GET", "PUT"])
+@api_bp.route("/api/profile/me", methods=["GET", "PUT"])
 @jwt_required()
 def my_profile():
 
@@ -584,7 +570,7 @@ def my_profile():
 # USER PROFILE
 # ==========================================================
 
-@app.get("/api/profile/<int:user_id>")
+@api_bp.get("/api/profile/<int:user_id>")
 @jwt_required()
 def user_profile_api(user_id):
 
@@ -645,7 +631,7 @@ def user_profile_api(user_id):
 # USER POSTS
 # ==========================================================
 
-@app.get("/api/profile/<int:user_id>/userposts")
+@api_bp.get("/api/profile/<int:user_id>/userposts")
 @jwt_required()
 def userposts_api(user_id):
 
@@ -679,7 +665,7 @@ def userposts_api(user_id):
 # USER INFO
 # ==========================================================
 
-@app.get("/api/profile/<int:user_id>/info")
+@api_bp.get("/api/profile/<int:user_id>/info")
 @jwt_required()
 def user_info_api(user_id):
 
@@ -707,7 +693,7 @@ def user_info_api(user_id):
 # FOLLOWERS
 # ==========================================================
 
-@app.get("/api/profile/<int:user_id>/followers")
+@api_bp.get("/api/profile/<int:user_id>/followers")
 @jwt_required()
 def followers_api(user_id):
 
@@ -742,7 +728,7 @@ def followers_api(user_id):
 # FOLLOWING
 # ==========================================================
 
-@app.get("/api/profile/<int:user_id>/following")
+@api_bp.get("/api/profile/<int:user_id>/following")
 @jwt_required()
 def following_api(user_id):
 
@@ -773,7 +759,7 @@ def following_api(user_id):
             for u in users
         ]
     )
-@app.put("/api/profile/me/dp")
+@api_bp.put("/api/profile/me/dp")
 @jwt_required()
 def update_profile_picture():
 
@@ -837,7 +823,7 @@ def update_profile_picture():
 # MY POSTS
 # ==========================================================
 
-@app.get("/api/profile/me/posts")
+@api_bp.get("/api/profile/me/posts")
 @jwt_required()
 def my_posts_api():
 
@@ -884,7 +870,7 @@ def my_posts_api():
 # FEED
 # ==========================================================
 
-@app.get("/api/posts")
+@api_bp.get("/api/posts")
 @jwt_required()
 def get_posts_api():
 
@@ -993,7 +979,7 @@ def get_posts_api():
 # CREATE POST
 # ==========================================================
 
-@app.post("/api/posts")
+@api_bp.post("/api/posts")
 @jwt_required()
 def create_post_api():
 
@@ -1112,7 +1098,7 @@ def create_post_api():
 # LIKE / UNLIKE
 # ==========================================================
 
-@app.post("/api/posts/<int:post_id>/like")
+@api_bp.post("/api/posts/<int:post_id>/like")
 @jwt_required()
 def like_post_api(post_id):
 
@@ -1200,7 +1186,7 @@ def like_post_api(post_id):
 # ADD COMMENT
 # ==========================================================
 
-@app.post("/api/posts/<int:post_id>/comments")
+@api_bp.post("/api/posts/<int:post_id>/comments")
 @jwt_required()
 def add_comment_api(post_id):
 
@@ -1275,7 +1261,7 @@ def add_comment_api(post_id):
 # GET COMMENTS
 # ==========================================================
 
-@app.get("/api/posts/<int:post_id>/comments")
+@api_bp.get("/api/posts/<int:post_id>/comments")
 @jwt_required()
 def get_comments_api(post_id):
 
@@ -1331,7 +1317,7 @@ def get_comments_api(post_id):
 # BUDDY PAGE
 # ==========================================================
 
-@app.get("/api/buddies")
+@api_bp.get("/api/buddies")
 @jwt_required()
 def buddies_page_api():
 
@@ -1357,7 +1343,7 @@ def buddies_page_api():
 # MY FOLLOWERS
 # ==========================================================
 
-@app.get("/api/buddies/myfollowers")
+@api_bp.get("/api/buddies/myfollowers")
 @jwt_required()
 def myfollowers_api():
 
@@ -1399,7 +1385,7 @@ def myfollowers_api():
 # USER FOLLOWERS
 # ==========================================================
 
-@app.get("/api/buddies/<int:user_id>/userfollowers")
+@api_bp.get("/api/buddies/<int:user_id>/userfollowers")
 @jwt_required()
 def userfollowers_api(user_id):
 
@@ -1434,7 +1420,7 @@ def userfollowers_api(user_id):
 # USER FOLLOWING
 # ==========================================================
 
-@app.get("/api/buddies/<int:user_id>/userfollowing")
+@api_bp.get("/api/buddies/<int:user_id>/userfollowing")
 @jwt_required()
 def userfollowing_api(user_id):
 
@@ -1469,7 +1455,7 @@ def userfollowing_api(user_id):
 # ADD BUDDY
 # ==========================================================
 
-@app.post("/api/buddies")
+@api_bp.post("/api/buddies")
 @jwt_required()
 def add_buddy_api():
 
@@ -1535,7 +1521,7 @@ def add_buddy_api():
 # USERS TO ADD
 # ==========================================================
 
-@app.get("/api/buddies/suggestions")
+@api_bp.get("/api/buddies/suggestions")
 @jwt_required()
 def users_to_add_api():
 
@@ -1577,7 +1563,7 @@ def users_to_add_api():
 # MY FOLLOWING
 # ==========================================================
 
-@app.get("/api/buddies/myfollowing")
+@api_bp.get("/api/buddies/myfollowing")
 @jwt_required()
 def myfollowing_api():
 
@@ -1621,7 +1607,7 @@ def myfollowing_api():
 # USER STATS
 # ==========================================================
 
-@app.get("/api/buddies/<int:user_id>/stats")
+@api_bp.get("/api/buddies/<int:user_id>/stats")
 @jwt_required()
 def user_stats_api(user_id):
 
@@ -1651,7 +1637,7 @@ def user_stats_api(user_id):
 # USER INFO
 # ==========================================================
 
-@app.get("/api/buddies/<int:user_id>/info")
+@api_bp.get("/api/buddies/<int:user_id>/info")
 @jwt_required()
 def userinfo_api(user_id):
 
@@ -1679,7 +1665,7 @@ def userinfo_api(user_id):
 # MUTUAL BUDDIES
 # ==========================================================
 
-@app.get("/api/buddies/mutual")
+@api_bp.get("/api/buddies/mutual")
 @jwt_required()
 def mutual_buddies_api():
 
@@ -1730,7 +1716,7 @@ def mutual_buddies_api():
 # BUDDY NOTIFICATION COUNT
 # ==========================================================
 
-@app.get("/api/buddies/count")
+@api_bp.get("/api/buddies/count")
 @jwt_required()
 def buddy_count_api():
 
@@ -1754,7 +1740,7 @@ def buddy_count_api():
 # SEARCH BUDDIES
 # ==========================================================
 
-@app.post("/api/buddies/search")
+@api_bp.post("/api/buddies/search")
 @jwt_required()
 def search_buddies_api():
 
@@ -1811,7 +1797,7 @@ def search_buddies_api():
 # MY BUDDIES
 # ==========================================================
 
-@app.get("/api/buddies/my")
+@api_bp.get("/api/buddies/my")
 @jwt_required()
 def my_buddies_api():
 
@@ -1869,7 +1855,7 @@ def my_buddies_api():
 # MY WALLET
 # ==========================================================
 
-@app.get("/api/wallet")
+@api_bp.get("/api/wallet")
 @jwt_required()
 def wallet_api():
 
@@ -1903,7 +1889,7 @@ def wallet_api():
 # WALLET PAGE
 # ==========================================================
 
-@app.get("/api/wallet/home")
+@api_bp.get("/api/wallet/home")
 @jwt_required()
 def wallet_page_api():
 
@@ -1929,7 +1915,7 @@ def wallet_page_api():
 # WALLET NOTIFICATION COUNT
 # ==========================================================
 
-@app.get("/api/wallet/count")
+@api_bp.get("/api/wallet/count")
 @jwt_required()
 def wallet_count_api():
 
@@ -1954,7 +1940,7 @@ def wallet_count_api():
 # EARNINGS
 # ==========================================================
 
-@app.get("/api/wallet/earnings")
+@api_bp.get("/api/wallet/earnings")
 @jwt_required()
 def earnings_api():
 
@@ -1993,18 +1979,17 @@ def earnings_api():
 import base64
 import requests
 
-PAYPAL_BASE_URL = (
-    "https://api-m.sandbox.paypal.com"
-    if app.config["PAYPAL_MODE"] == "sandbox"
-    else "https://api-m.paypal.com"
-)
+def paypal_base_url():
+    if current_app.config["PAYPAL_MODE"] == "sandbox":
+        return "https://api-m.sandbox.paypal.com"
+    return "https://api-m.paypal.com"
 
 
 def paypal_access_token():
 
     credentials = (
-        f'{app.config["PAYPAL_CLIENT_ID"]}:'
-        f'{app.config["PAYPAL_CLIENT_SECRET"]}'
+        f'{current_app.config["PAYPAL_CLIENT_ID"]}:'
+        f'{current_app.config["PAYPAL_CLIENT_SECRET"]}'
     )
 
     encoded = base64.b64encode(
@@ -2012,7 +1997,7 @@ def paypal_access_token():
     ).decode()
 
     response = requests.post(
-        f"{PAYPAL_BASE_URL}/v1/oauth2/token",
+        f"{paypal_base_url()}/v1/oauth2/token",
         headers={
             "Authorization": f"Basic {encoded}",
             "Accept": "application/json",
@@ -2033,7 +2018,7 @@ def paypal_access_token():
 # DEPOSIT
 # ==========================================================
 
-@app.post("/api/wallet/deposit")
+@api_bp.post("/api/wallet/deposit")
 @jwt_required()
 def deposit_api():
 
@@ -2094,7 +2079,7 @@ def deposit_api():
 
     response = requests.post(
 
-        f"{PAYPAL_BASE_URL}/v2/checkout/orders",
+        f"{paypal_base_url()}/v2/checkout/orders",
 
         headers={
             "Authorization": f"Bearer {token}",
@@ -2168,7 +2153,7 @@ def deposit_api():
 # VERIFY PAYPAL DEPOSIT
 # ==========================================================
 
-@app.post("/api/wallet/deposit/verify")
+@api_bp.post("/api/wallet/deposit/verify")
 @jwt_required()
 def verify_deposit_api():
 
@@ -2233,7 +2218,7 @@ def verify_deposit_api():
 
     response = requests.post(
 
-        f"{PAYPAL_BASE_URL}/v2/checkout/orders/{order_id}/capture",
+        f"{paypal_base_url()}/v2/checkout/orders/{order_id}/capture",
 
         headers={
             "Authorization": f"Bearer {token}",
@@ -2301,7 +2286,7 @@ def verify_deposit_api():
 # WITHDRAW PAGE
 # ==========================================================
 
-@app.get("/api/wallet/withdraw")
+@api_bp.get("/api/wallet/withdraw")
 @jwt_required()
 def withdraw_page_api():
 
@@ -2362,7 +2347,7 @@ def withdraw_page_api():
 # REQUEST WITHDRAWAL
 # ==========================================================
 
-@app.post("/api/wallet/withdraw")
+@api_bp.post("/api/wallet/withdraw")
 @jwt_required()
 def request_withdrawal_api():
 
@@ -2440,7 +2425,7 @@ def request_withdrawal_api():
 # CHAT
 # ==========================================================
 
-@app.post("/api/chat/send")
+@api_bp.post("/api/chat/send")
 @jwt_required()
 def send_message():
 
@@ -2547,7 +2532,7 @@ def send_message():
         )
 
 
-@app.get("/api/chat/status/<int:user_id>")
+@api_bp.get("/api/chat/status/<int:user_id>")
 @jwt_required()
 def user_status(user_id):
 
@@ -2570,7 +2555,7 @@ def user_status(user_id):
             )
         }
     )
-@app.delete("/api/chat/message")
+@api_bp.delete("/api/chat/message")
 @jwt_required()
 def delete_message():
 
@@ -2608,7 +2593,7 @@ def delete_message():
     )
 
 
-@app.get("/api/chat/messages/<int:other_user>")
+@api_bp.get("/api/chat/messages/<int:other_user>")
 @jwt_required()
 def get_messages(other_user):
 
@@ -2679,7 +2664,7 @@ def get_messages(other_user):
             ]
         }
     )
-@app.delete("/api/chat/clear")
+@api_bp.delete("/api/chat/clear")
 @jwt_required()
 def clear_chat():
 
@@ -2736,7 +2721,7 @@ def clear_chat():
     )
 
 
-@app.get("/api/chat/unread")
+@api_bp.get("/api/chat/unread")
 @jwt_required()
 def unread_counts():
 
@@ -2877,7 +2862,7 @@ def stop_typing(data):
 # ==========================================================
 # GIFTS
 # ==========================================================
-@app.get("/api/gifts")
+@api_bp.get("/api/gifts")
 @jwt_required()
 def get_gifts():
 
@@ -2905,7 +2890,7 @@ def get_gifts():
     )
 
 
-@app.post("/api/gifts/buy")
+@api_bp.post("/api/gifts/buy")
 @jwt_required()
 def buy_gift():
 
@@ -2994,7 +2979,7 @@ def buy_gift():
     )
 
 
-@app.get("/api/gifts/count/<int:post_id>")
+@api_bp.get("/api/gifts/count/<int:post_id>")
 def gift_count(post_id):
 
     total = db.session.query(
@@ -3011,7 +2996,7 @@ def gift_count(post_id):
             "count": total or 0
         }
     )
-@app.post("/api/gifts/send")
+@api_bp.post("/api/gifts/send")
 @jwt_required()
 def send_gift():
 
@@ -3115,7 +3100,7 @@ def send_gift():
             )
         }
     )
-@app.get("/api/gifts/my")
+@api_bp.get("/api/gifts/my")
 @jwt_required()
 def my_gifts():
 
@@ -3146,7 +3131,7 @@ def my_gifts():
             ]
         }
     )
-@app.post("/api/gifts/check-access")
+@api_bp.post("/api/gifts/check-access")
 @jwt_required()
 def check_gift_access():
 
@@ -3206,14 +3191,14 @@ def check_gift_access():
 # ==========================================================
 # SETTINGS
 # ==========================================================
-@app.get("/api/settings/terms")
+@api_bp.get("/api/settings/terms")
 def terms():
 
     return success_response(
         "Terms retrieved successfully",
         {}
     )
-@app.get("/api/settings/about")
+@api_bp.get("/api/settings/about")
 def about():
 
     return success_response(
@@ -3223,7 +3208,7 @@ def about():
 # ==========================================================
 # NOTIFICATIONS
 # ==========================================================
-@app.get("/api/notifications/count")
+@api_bp.get("/api/notifications/count")
 @jwt_required()
 def notification_count():
 
@@ -3240,7 +3225,7 @@ def notification_count():
             "count": count
         }
     )
-@app.get("/api/notifications")
+@api_bp.get("/api/notifications")
 @jwt_required()
 def notifications():
 
@@ -3283,7 +3268,7 @@ def notifications():
 # ==========================================================
 # SEARCH
 # ==========================================================
-@app.get("/api/search")
+@api_bp.get("/api/search")
 @jwt_required()
 def search():
 
@@ -3396,7 +3381,7 @@ def admin_only():
         )
 
     return user, None
-@app.get("/api/admin/dashboard")
+@api_bp.get("/api/admin/dashboard")
 @jwt_required()
 def admin_dashboard():
 
@@ -3525,7 +3510,7 @@ def admin_dashboard():
             ]
         }
     )
-@app.get("/api/admin/users")
+@api_bp.get("/api/admin/users")
 @jwt_required()
 def admin_users():
 
@@ -3559,7 +3544,7 @@ def admin_users():
             ]
         }
     )
-@app.delete("/api/admin/users")
+@api_bp.delete("/api/admin/users")
 @jwt_required()
 def delete_selected_users():
 
@@ -3643,7 +3628,7 @@ def delete_selected_users():
     )
 
 
-@app.delete("/api/admin/posts/<int:post_id>")
+@api_bp.delete("/api/admin/posts/<int:post_id>")
 @jwt_required()
 def delete_post_admin(post_id):
 
@@ -3700,7 +3685,7 @@ def delete_post_admin(post_id):
     )
 
 
-@app.get("/api/admin/posts")
+@api_bp.get("/api/admin/posts")
 @jwt_required()
 def admin_posts():
 
@@ -3763,7 +3748,7 @@ def admin_posts():
             "posts": result
         }
     )
-@app.delete("/api/admin/posts")
+@api_bp.delete("/api/admin/posts")
 @jwt_required()
 def delete_selected_posts():
 
@@ -3829,7 +3814,7 @@ def delete_selected_posts():
     )
 
 
-@app.delete("/api/admin/posts/all")
+@api_bp.delete("/api/admin/posts/all")
 @jwt_required()
 def clear_all_posts():
 
@@ -3882,7 +3867,7 @@ def clear_all_posts():
     )
 
 
-@app.get("/api/admin/withdrawals")
+@api_bp.get("/api/admin/withdrawals")
 @jwt_required()
 def admin_withdrawals():
 
@@ -3922,7 +3907,7 @@ def admin_withdrawals():
             ]
         }
     )
-@app.post("/api/admin/withdrawals/<int:id>/approve")
+@api_bp.post("/api/admin/withdrawals/<int:id>/approve")
 @jwt_required()
 def approve_withdrawal(id):
 
@@ -3979,7 +3964,7 @@ def approve_withdrawal(id):
     )
 
 
-@app.post("/api/admin/withdrawals/<int:id>/reject")
+@api_bp.post("/api/admin/withdrawals/<int:id>/reject")
 @jwt_required()
 def reject_withdrawal(id):
 

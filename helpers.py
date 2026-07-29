@@ -33,7 +33,7 @@ def login_required(f):
     def wrapper(*args, **kwargs):
         if "user_id" not in session:
             flash("Please log in first.", "error")
-            return redirect(url_for("login"))
+            return redirect(url_for("web.login"))
         return f(*args, **kwargs)
     return wrapper
 
@@ -43,11 +43,11 @@ def admin_required(f):
     def wrapper(*args, **kwargs):
         if "user_id" not in session:
             flash("Please log in first.")
-            return redirect(url_for("login"))
+            return redirect(url_for("web.login"))
 
         if not session.get("is_admin"):
             flash("Admin access only.")
-            return redirect(url_for("nonimas"))
+            return redirect(url_for("web.nonimas"))
 
         return f(*args, **kwargs)
 
