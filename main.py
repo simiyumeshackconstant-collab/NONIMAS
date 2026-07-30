@@ -3359,6 +3359,55 @@ def search():
             ]
         }
     )
+@api_bp.post("api/videos")
+@jwt_required()
+def videos():
+    
+    user_id = int(get_jwt_identity())
+
+    data = request.get_json(silent=True)
+
+    if not data:
+        return error_response("Invalid request")
+
+    page = int(data.get("page", 1))
+    per_page = int(data.get("per_page", 10))
+
+    videos_query = Post.query.filter_by(
+        media_type="video"
+    ).order_by(
+        Post.created_at.desc()
+    )
+
+    pagination = videos_query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
+
+    videos = pagination.items
+
+    return success_response(
+        "Videos retrieved",
+        {
+            "videos": [
+                {
+                    "id": video.id,
+                    "user_id": video.user_id,
+                    "content": video.content,
+                    "media_url": video.media_url,
+                    "created_at": video.created_at.strftime(
+                        "%Y-%m-%d %H:%M"
+                    )
+                }
+                for video in videos
+            ],
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "current_page": pagination.page
+        }
+    )
+        
 # ==========================================================
 # ADMIN
 # ==========================================================
