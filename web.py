@@ -102,6 +102,7 @@ from helpers import (
 )
 # ---------------- ROUTES ----------------
 @web_bp.route("/")
+@csrf.exempt
 @login_required
 def nonimas():
     if not session.get("is_admin") and not session.get("user_id"):
