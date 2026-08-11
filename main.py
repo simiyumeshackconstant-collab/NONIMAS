@@ -3359,7 +3359,7 @@ def search():
             ]
         }
     )
-@api_bp.post("api/videos")
+@api_bp.post("/api/videos")
 @jwt_required()
 def videos():
     
