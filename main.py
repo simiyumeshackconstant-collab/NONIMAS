@@ -2425,6 +2425,159 @@ def request_withdrawal_api():
 # CHAT
 # ==========================================================
 
+@api_bp.get("/api/chat")
+@jwt_required()
+def get_chats():
+
+    try:
+
+        user_id = int(get_jwt_identity())
+
+        # Get all messages involving the logged-in user.
+        messages = ChatMessage.query.filter(
+            (
+                (ChatMessage.sender_id == user_id) |
+                (ChatMessage.receiver_id == user_id)
+            )
+        ).order_by(
+            ChatMessage.created_at.desc()
+        ).all()
+
+        conversations = {}
+
+        for message in messages:
+
+            if message.sender_id == user_id:
+                other_user_id = message.receiver_id
+            else:
+                other_user_id = message.sender_id
+
+            # Keep only the newest message for each conversation.
+            if other_user_id not in conversations:
+                conversations[other_user_id] = message
+
+        chats = []
+
+        for other_user_id, last_message in conversations.items():
+
+            other_user = User.query.get(other_user_id)
+
+            if not other_user:
+                continue
+
+            unread_count = ChatMessage.query.filter(
+                ChatMessage.sender_id == other_user_id,
+                ChatMessage.receiver_id == user_id,
+                ChatMessage.is_read == False
+            ).count()
+
+            # Safely get profile picture in case the User model
+            # uses a slightly different field or does not have one.
+            avatar = getattr(
+                other_user,
+                "profile_picture",
+                None
+            )
+
+            # Some projects may use profile_picture_url instead.
+            if not avatar:
+                avatar = getattr(
+                    other_user,
+                    "profile_picture_url",
+                    None
+                )
+
+            last_seen = (
+                other_user.last_seen.strftime("%H:%M")
+                if getattr(
+                    other_user,
+                    "last_seen",
+                    None
+                )
+                else "recently"
+            )
+
+            online = bool(
+                getattr(
+                    other_user,
+                    "is_online",
+                    False
+                )
+            )
+
+            last_message_text = (
+                last_message.message
+                or ""
+            )
+
+            # Display media-only messages properly.
+            if (
+                not last_message_text
+                and last_message.media_type
+            ):
+
+                if last_message.media_type == "image":
+                    last_message_text = "Photo"
+
+                elif last_message.media_type == "video":
+                    last_message_text = "Video"
+
+                elif last_message.media_type == "pdf":
+                    last_message_text = "PDF"
+
+                else:
+                    last_message_text = "Attachment"
+
+            chats.append(
+                {
+                    "id": other_user_id,
+
+                    "name": getattr(
+                        other_user,
+                        "name",
+                        ""
+                    ),
+
+                    "avatar": avatar,
+
+                    "online": online,
+
+                    "typing": False,
+
+                    "last_seen": last_seen,
+
+                    "last_message": last_message_text,
+
+                    "last_message_time": (
+                        last_message.created_at.strftime(
+                            "%Y-%m-%d %H:%M"
+                        )
+                        if last_message.created_at
+                        else ""
+                    ),
+
+                    "unread_count": unread_count
+                }
+            )
+
+        return success_response(
+            "Chats retrieved successfully",
+            {
+                "chats": chats
+            }
+        )
+
+    except Exception as e:
+
+        print(
+            "GET CHATS ERROR:",
+            e
+        )
+
+        return error_response(
+            str(e),
+            500
+        )
 @api_bp.post("/api/chat/send")
 @jwt_required()
 def send_message():
@@ -2650,15 +2803,30 @@ def get_messages(other_user):
             "messages": [
                 {
                     "id": message.id,
+
+                    "chat_id": other_user,
+
                     "sender": message.sender_id,
+
                     "receiver": message.receiver_id,
+
                     "message": message.message,
+
                     "media_url": message.media_url,
+
                     "media_type": message.media_type,
-                    "created_at": message.created_at.strftime(
-                        "%Y-%m-%d %H:%M"
+
+                     "created_at": message.created_at.strftime(
+                         "%Y-%m-%d %H:%M"
                     ),
-                    "is_read": message.is_read
+
+                    "is_read": message.is_read,
+
+                    "delivered": True,
+
+                    "edited": False,
+
+                    "deleted": False
                 }
                 for message in messages
             ]
