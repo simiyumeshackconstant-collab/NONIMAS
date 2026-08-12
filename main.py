@@ -3527,19 +3527,30 @@ def search():
             ]
         }
     )
+
+# ==========================================================
+# VIDEOS
+# ==========================================================
+
 @api_bp.post("/api/videos")
 @jwt_required()
 def videos():
-    
+
     user_id = int(get_jwt_identity())
 
-    data = request.get_json(silent=True)
-
-    if not data:
-        return error_response("Invalid request")
+    data = request.get_json(silent=True) or {}
 
     page = int(data.get("page", 1))
     per_page = int(data.get("per_page", 10))
+
+    if page < 1:
+        page = 1
+
+    if per_page < 1:
+        per_page = 10
+
+    if per_page > 50:
+        per_page = 50
 
     videos_query = Post.query.filter_by(
         media_type="video"
@@ -3553,29 +3564,136 @@ def videos():
         error_out=False
     )
 
-    videos = pagination.items
+    videos_result = []
+
+    for video in pagination.items:
+
+        user = User.query.get(video.user_id)
+
+        total_likes = Like.query.filter_by(
+            post_id=video.id,
+            is_active=True
+        ).count()
+
+        total_comments = Comment.query.filter_by(
+            post_id=video.id
+        ).count()
+
+        total_gifts = db.session.query(
+            db.func.sum(
+                GiftTransaction.quantity
+            )
+        ).filter_by(
+            post_id=video.id
+        ).scalar() or 0
+
+        videos_result.append({
+
+            "id": video.id,
+
+            "user": {
+                "id": video.user_id,
+
+                "name": (
+                    user.full_name
+                    if user
+                    else "Unknown"
+                ),
+
+                "dp": (
+                    user.user_dp_pic
+                    if user and user.user_dp_pic
+                    else "default_avatar.png"
+                )
+            },
+
+            "content": video.content or "",
+
+            "media": video.media_url,
+
+            "media_url": video.media_url,
+
+            "likes": total_likes,
+
+            "comments": total_comments,
+
+            "gifts": total_gifts,
+
+            "views": getattr(
+                video,
+                "views",
+                0
+            ),
+
+            "created_at": (
+                video.created_at.strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+                if video.created_at
+                else None
+            )
+        })
 
     return success_response(
         "Videos retrieved",
         {
-            "videos": [
-                {
-                    "id": video.id,
-                    "user_id": video.user_id,
-                    "content": video.content,
-                    "media_url": video.media_url,
-                    "created_at": video.created_at.strftime(
-                        "%Y-%m-%d %H:%M"
-                    )
-                }
-                for video in videos
-            ],
+            "videos": videos_result,
+
             "total": pagination.total,
+
             "pages": pagination.pages,
+
             "current_page": pagination.page
         }
     )
-        
+# ==========================================================
+# VIDEO VIEW
+# ==========================================================
+
+@api_bp.post("/api/videos/<int:video_id>/view")
+@jwt_required()
+def add_video_view(video_id):
+
+    user_id = int(
+        get_jwt_identity()
+    )
+
+    video = Post.query.filter_by(
+        id=video_id,
+        media_type="video"
+    ).first()
+
+    if not video:
+
+        return error_response(
+            "Video not found",
+            404
+        )
+
+    # ------------------------------------------------------
+    # If Post already has a views column
+    # ------------------------------------------------------
+
+    if hasattr(video, "views"):
+
+        video.views = (
+            video.views or 0
+        ) + 1
+
+        db.session.commit()
+
+        return success_response(
+            "Video view recorded",
+            {
+                "video_id": video.id,
+                "views": video.views
+            }
+        )
+
+    return error_response(
+        "Video view tracking is not configured",
+        500
+    )
 # ==========================================================
 # ADMIN
 # ==========================================================
