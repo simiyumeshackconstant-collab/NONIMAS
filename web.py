@@ -552,6 +552,7 @@ def resend_otp():
 # ----------- Admin Dashboard -----------
 @web_bp.route("/admin_dashboard")
 @login_required
+@csrf.exempt
 @admin_required
 def admin_dashboard():
 
@@ -918,6 +919,7 @@ def clear_all_posts():
 
 @web_bp.route("/admin_withdrawals")
 @admin_required
+@csrf.exempt
 def admin_withdrawals():
 
     requests = WithdrawalRequest.query.order_by(
@@ -930,6 +932,7 @@ def admin_withdrawals():
     )
 @web_bp.route("/approve_withdrawal/<int:id>", methods=["POST"])
 @admin_required
+@csrf.exempt
 def approve_withdrawal(id):
 
     req = WithdrawalRequest.query.get_or_404(id)
@@ -957,6 +960,7 @@ def approve_withdrawal(id):
 
 @web_bp.route("/reject_withdrawal/<int:id>", methods=["POST"])
 @admin_required
+@csrf.exempt
 def reject_withdrawal(id):
 
     req = WithdrawalRequest.query.get_or_404(id)
