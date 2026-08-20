@@ -158,7 +158,6 @@ def register():
         201
     )
 
-
 @api_bp.post("/auth/login")
 def login():
 
@@ -216,12 +215,25 @@ def login():
             401
         )
 
+    # ----------------------------------------------------------
+    # USER EXISTS BUT HAS NOT VERIFIED ACCOUNT
+    # ----------------------------------------------------------
+
     if not user.is_verified:
 
-        return error_response(
+        return success_response(
             "Account not verified",
-            403
+            {
+                "user_id": user.id,
+                "email": user.email,
+                "phone": user.phone,
+                "requires_verification": True
+            }
         )
+
+    # ----------------------------------------------------------
+    # VERIFIED USER
+    # ----------------------------------------------------------
 
     access_token = create_access_token(
         identity=str(user.id)
@@ -236,6 +248,7 @@ def login():
         {
             "access_token": access_token,
             "refresh_token": refresh_token,
+            "requires_verification": False,
             "user": {
                 "id": user.id,
                 "full_name": user.full_name,
@@ -249,8 +262,7 @@ def login():
             }
         }
     )
-
-
+    
 @api_bp.post("/auth/verify-account")
 def verify_account():
 
@@ -506,7 +518,7 @@ def internal_server_error(error):
 # MY PROFILE / UPDATE DP
 # ==========================================================
 
-@api_bp.route("/api/profile/me", methods=["GET", "PUT"])
+@api_bp.route("/profile/me", methods=["GET", "PUT"])
 @jwt_required()
 def my_profile():
 
@@ -561,7 +573,7 @@ def my_profile():
 # USER PROFILE
 # ==========================================================
 
-@api_bp.get("/api/profile/<int:user_id>")
+@api_bp.get("/profile/<int:user_id>")
 @jwt_required()
 def user_profile_api(user_id):
 
@@ -622,7 +634,7 @@ def user_profile_api(user_id):
 # USER POSTS
 # ==========================================================
 
-@api_bp.get("/api/profile/<int:user_id>/userposts")
+@api_bp.get("/profile/<int:user_id>/userposts")
 @jwt_required()
 def userposts_api(user_id):
 
@@ -656,7 +668,7 @@ def userposts_api(user_id):
 # USER INFO
 # ==========================================================
 
-@api_bp.get("/api/profile/<int:user_id>/info")
+@api_bp.get("/profile/<int:user_id>/info")
 @jwt_required()
 def user_info_api(user_id):
 
@@ -684,7 +696,7 @@ def user_info_api(user_id):
 # FOLLOWERS
 # ==========================================================
 
-@api_bp.get("/api/profile/<int:user_id>/followers")
+@api_bp.get("/profile/<int:user_id>/followers")
 @jwt_required()
 def followers_api(user_id):
 
@@ -719,7 +731,7 @@ def followers_api(user_id):
 # FOLLOWING
 # ==========================================================
 
-@api_bp.get("/api/profile/<int:user_id>/following")
+@api_bp.get("/profile/<int:user_id>/following")
 @jwt_required()
 def following_api(user_id):
 
@@ -750,7 +762,7 @@ def following_api(user_id):
             for u in users
         ]
     )
-@api_bp.put("/api/profile/me/dp")
+@api_bp.put("/profile/me/dp")
 @jwt_required()
 def update_profile_picture():
 
