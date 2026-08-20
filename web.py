@@ -14,7 +14,6 @@ from flask import (
 from extensions import (
     db,
     socketio,
-    csrf
 )
 
 from werkzeug.security import (
@@ -45,7 +44,6 @@ import cloudinary.uploader
 
 from email.mime.text import MIMEText
 
-from flask_wtf.csrf import CSRFProtect
 
 # ==========================================================
 # WEBSITE BLUEPRINT
@@ -102,7 +100,6 @@ from helpers import (
 )
 # ---------------- ROUTES ----------------
 @web_bp.route("/")
-@csrf.exempt
 @login_required
 def nonimas():
     if not session.get("is_admin") and not session.get("user_id"):
@@ -111,7 +108,6 @@ def nonimas():
     return render_template("nonimas.html")
 # -------- ACTIONS --------
 @web_bp.route("/search")
-@csrf.exempt
 @login_required
 def search():
 
@@ -210,7 +206,6 @@ def notification_count():
         "count": count
     })
 @web_bp.route("/notifications")
-@csrf.exempt
 @login_required
 def notifications():
 
@@ -234,7 +229,6 @@ def notifications():
         notifications=notifications
     )
 @web_bp.route("/like_post", methods=["POST"])
-@csrf.exempt
 @login_required
 def like_post():
 
@@ -307,7 +301,6 @@ def like_post():
     })
 
 @web_bp.route("/add_comment", methods=["POST"])
-@csrf.exempt
 @login_required
 def add_comment():
 
@@ -352,7 +345,6 @@ def add_comment():
     })
 
 @web_bp.route("/comments/<int:post_id>")
-@csrf.exempt
 @login_required
 def get_comments(post_id):
 
@@ -374,7 +366,6 @@ def get_comments(post_id):
 
     return jsonify(result) 
 @web_bp.route("/chat_page")
-@csrf.exempt
 @login_required
 def chat_page():
 
@@ -382,7 +373,6 @@ def chat_page():
 
 
 @web_bp.route('/register', methods=['GET', 'POST'])
-@csrf.exempt
 def register():
 
     # ---------- STEP 1: SHOW FORM FIRST ----------
@@ -437,7 +427,6 @@ def register():
 # ----------- Login -----------
 
 @web_bp.route("/login", methods=["GET", "POST"])
-@csrf.exempt
 def login():
 
     if request.method == "POST":
@@ -490,7 +479,6 @@ def login():
 
     return render_template("login.html")
 @web_bp.route("/verify_account", methods=["GET", "POST"])
-@csrf.exempt
 def verify_account():
 
     user_id = session.get("pending_user_id")
@@ -526,7 +514,6 @@ def verify_account():
 
     return render_template("verify_account.html")
 @web_bp.route("/resend_otp")
-@csrf.exempt
 def resend_otp():
 
     user_id = session.get("pending_user_id")
@@ -552,7 +539,6 @@ def resend_otp():
 # ----------- Admin Dashboard -----------
 @web_bp.route("/admin_dashboard")
 @login_required
-@csrf.exempt
 @admin_required
 def admin_dashboard():
 
@@ -634,7 +620,6 @@ def admin_dashboard():
         total_posts=total_posts,
     )
 @web_bp.route("/admin_users")
-@csrf.exempt
 @login_required
 @admin_required
 def admin_users():
@@ -652,7 +637,6 @@ def admin_users():
     methods=["POST"]
 )
 @login_required
-@csrf.exempt
 @admin_required
 def delete_selected_users():
 
@@ -735,7 +719,6 @@ def delete_selected_users():
         url_for("web.admin_users")
     )
 @web_bp.route("/delete_post_admin/<int:post_id>", methods=["POST"])
-@csrf.exempt
 @admin_required
 def delete_post_admin(post_id):
 
@@ -779,7 +762,6 @@ def delete_post_admin(post_id):
 # -------- ADMIN POSTS PAGE --------
 
 @web_bp.route("/admin_posts")
-@csrf.exempt
 @login_required
 @admin_required
 def admin_posts():
@@ -826,7 +808,6 @@ def admin_posts():
 # -------- DELETE SELECTED POSTS --------
 
 @web_bp.route("/delete_selected_posts", methods=["POST"])
-@csrf.exempt
 @login_required
 @admin_required
 def delete_selected_posts():
@@ -878,7 +859,6 @@ def delete_selected_posts():
 # -------- CLEAR ALL POSTS --------
 
 @web_bp.route("/clear_all_posts", methods=["POST"])
-@csrf.exempt
 @login_required
 @admin_required
 def clear_all_posts():
@@ -919,7 +899,6 @@ def clear_all_posts():
 
 @web_bp.route("/admin_withdrawals")
 @admin_required
-@csrf.exempt
 def admin_withdrawals():
 
     requests = WithdrawalRequest.query.order_by(
@@ -932,7 +911,6 @@ def admin_withdrawals():
     )
 @web_bp.route("/approve_withdrawal/<int:id>", methods=["POST"])
 @admin_required
-@csrf.exempt
 def approve_withdrawal(id):
 
     req = WithdrawalRequest.query.get_or_404(id)
@@ -960,7 +938,6 @@ def approve_withdrawal(id):
 
 @web_bp.route("/reject_withdrawal/<int:id>", methods=["POST"])
 @admin_required
-@csrf.exempt
 def reject_withdrawal(id):
 
     req = WithdrawalRequest.query.get_or_404(id)
@@ -975,7 +952,6 @@ def reject_withdrawal(id):
 
 @web_bp.route("/logout")
 @login_required
-
 def logout():
 
     session.pop("user_id", None)
@@ -988,21 +964,18 @@ def logout():
 
 
 @web_bp.route("/terms")
-
 def terms():
 
     return render_template("terms.html")
 
 
 @web_bp.route("/about")
-
 def about():
 
     return render_template("about.html")
 
 # -------- TRANSACTIONS --------
 @web_bp.route("/wallet/<int:user_id>")
-@csrf.exempt
 @login_required
 def wallet(user_id):
 
@@ -1030,7 +1003,6 @@ def wallet(user_id):
         "balance": wallet.balance
     })
 @web_bp.route("/wallet_page")
-@csrf.exempt
 @login_required
 def wallet_page():
 
@@ -1045,7 +1017,6 @@ def wallet_page():
 
     return render_template("wallet.html")
 @web_bp.route("/wallet_count")
-@csrf.exempt
 @login_required
 def wallet_count():
 
@@ -1061,7 +1032,6 @@ def wallet_count():
     })
 
 @web_bp.route("/earnings")
-@csrf.exempt
 @login_required
 def earnings():
 
@@ -1126,7 +1096,6 @@ def paypal_access_token():
 # ==========================================================
 
 @web_bp.route("/deposit", methods=["GET", "POST"])
-@csrf.exempt
 @login_required
 def deposit():
 
@@ -1252,7 +1221,6 @@ def deposit():
 # ==========================================================
 
 @web_bp.route("/verify_deposit")
-@csrf.exempt
 @login_required
 def verify_deposit():
     user_id = int(
@@ -1371,7 +1339,6 @@ def verify_deposit():
 
     return redirect(url_for("web.wallet_page"))
 @web_bp.route("/withdraw")
-@csrf.exempt
 @login_required
 def withdraw_page():
 
@@ -1457,7 +1424,6 @@ def get_gifts():
         } for g in gifts
     ])
 @web_bp.route("/buy_gift", methods=["POST"])
-@csrf.exempt
 @login_required
 def buy_gift():
     data = request.json
@@ -1533,7 +1499,6 @@ def gift_count(post_id):
         "count": total or 0
     })
 @web_bp.route("/send_gift", methods=["POST"])
-@csrf.exempt
 @login_required
 def send_gift():
 
@@ -1644,7 +1609,6 @@ def my_gifts():
         for g in balances
     ])
 @web_bp.route("/check_gift_access", methods=["POST"])
-@csrf.exempt
 @login_required
 def check_gift_access():
 
@@ -1674,7 +1638,6 @@ def check_gift_access():
 
 # -------- CONTENT --------
 @web_bp.route("/my_posts")
-@csrf.exempt
 @login_required
 def my_posts():
     user_id = session["user_id"]
@@ -1695,7 +1658,6 @@ def my_posts():
     return jsonify(result)
 # -------- PROFILE --------
 @web_bp.route("/dp", methods=["GET", "POST"])
-@csrf.exempt
 @login_required
 def dp():
 
@@ -1763,7 +1725,6 @@ def dp():
 
 # -------- BUDDIES PAGE --------
 @web_bp.route("/buddies_page")
-@csrf.exempt
 @login_required
 def buddies_page():
 
@@ -1800,7 +1761,6 @@ def followers():
 
     })
 @web_bp.route("/followers/<int:user_id>")
-@csrf.exempt
 @login_required
 def user_followers(user_id):
 
@@ -1821,7 +1781,6 @@ def user_following(user_id):
 
     return render_template("following.html", users=users)
 @web_bp.route("/add_buddy", methods=["POST"])
-@csrf.exempt
 @login_required
 
 def add_buddy():
@@ -1857,7 +1816,6 @@ def add_buddy():
     db.session.commit()
     return jsonify({"success": True})
 @web_bp.route("/users_to_add")
-@csrf.exempt
 @login_required
 def users_to_add():
 
@@ -1944,7 +1902,6 @@ def mutual_buddies():
         ]
     })
 @web_bp.route("/buddy_count")
-@csrf.exempt
 @login_required
 def buddy_count():
 
@@ -2006,7 +1963,6 @@ def my_buddies():
         })
     return render_template("my_buddies.html", buddies=result)
 @web_bp.route("/create_post", methods=["POST"])
-@csrf.exempt
 @login_required
 def create_post():
     try:
@@ -2195,7 +2151,6 @@ def conversation_page(user_id):
         other_user=user
     )
 @web_bp.route("/send_message", methods=["POST"])
-@csrf.exempt
 @login_required
 def send_message():
 
@@ -2290,7 +2245,6 @@ def user_status(user_id):
         if user.last_seen else "recently"
     })
 @web_bp.route("/delete_message", methods=["POST"])
-@csrf.exempt
 @login_required
 def delete_message():
     data = request.get_json()
@@ -2316,7 +2270,6 @@ def delete_message():
         "success":True
     })
 @web_bp.route("/get_messages/<int:other_user>")
-@csrf.exempt
 @login_required
 def get_messages(other_user):
     current_user = session["user_id"]
@@ -2406,7 +2359,6 @@ def user_posts(user_id):
     ])
 # -------- CLEAR CHAT --------
 @web_bp.route("/clear_chat_both", methods=["POST"])
-@csrf.exempt
 @login_required
 def clear_chat_both():
     current_user = session["user_id"]
@@ -2433,7 +2385,6 @@ def clear_chat_both():
     )
     return jsonify({"success": True})
 @web_bp.route("/unread_counts")
-@csrf.exempt
 @login_required
 def unread_counts():
 

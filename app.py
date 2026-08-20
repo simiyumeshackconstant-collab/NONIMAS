@@ -3,7 +3,6 @@ import os
 import cloudinary
 
 from flask import Flask
-from flask_wtf.csrf import CSRFProtect
 
 from config import config
 from extensions import (
@@ -11,7 +10,6 @@ from extensions import (
     migrate,
     jwt,
     cors,
-    csrf,
     socketio
 )
 
@@ -33,7 +31,6 @@ app.config.from_object(config["production"])
 # INITIALIZE EXTENSIONS
 # ==========================================================
 
-csrf = CSRFProtect(app)
 
 db.init_app(app)
 
@@ -49,7 +46,6 @@ cors.init_app(
         }
     }
 )
-csrf.init_app(app)
 
 socketio.init_app(
     app,
@@ -98,6 +94,6 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port,
-        debug=False,
+        debug=True,
         allow_unsafe_werkzeug=True
     )

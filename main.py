@@ -67,20 +67,11 @@ api_bp = Blueprint("api", __name__)
 # ==========================================================
 # ROUTES START BELOW
 # ==========================================================
-@api_bp.route("/")
-def index():
-    return {
-        "success": True,
-        "application": "Nonimas Android Backend",
-        "status": "Running"
-    }
-
-
 # ==========================================================
 # AUTH
 # ==========================================================
 
-@api_bp.post("/api/auth/register")
+@api_bp.post("/auth/register")
 def register():
 
     data = request.get_json(silent=True)
@@ -168,7 +159,7 @@ def register():
     )
 
 
-@api_bp.post("/api/auth/login")
+@api_bp.post("/auth/login")
 def login():
 
     data = request.get_json(silent=True)
@@ -260,7 +251,7 @@ def login():
     )
 
 
-@api_bp.post("/api/auth/verify-account")
+@api_bp.post("/auth/verify-account")
 def verify_account():
 
     data = request.get_json(silent=True)
@@ -329,7 +320,7 @@ def verify_account():
     )
 
 
-@api_bp.post("/api/auth/resend-otp")
+@api_bp.post("/auth/resend-otp")
 def resend_otp():
 
     data = request.get_json(silent=True)
@@ -378,7 +369,7 @@ def resend_otp():
     )
 
 
-@api_bp.get("/api/auth/me")
+@api_bp.get("/auth/me")
 @jwt_required()
 def me():
 
@@ -408,7 +399,7 @@ def me():
     )
 
 
-@api_bp.post("/api/auth/logout")
+@api_bp.post("/auth/logout")
 @jwt_required()
 def logout():
 
