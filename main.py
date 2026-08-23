@@ -460,6 +460,35 @@ def revoked_token_callback(jwt_header, jwt_payload):
         "Token has been revoked",
         401
     )
+@api_bp.post("/auth/refresh")
+@jwt_required(refresh=True)
+def refresh():
+    user_id = get_jwt_identity()
+
+    user = User.query.get(user_id)
+
+    if not user:
+        return error_response(
+            "User not found",
+            404
+        )
+
+    if not user.is_verified:
+        return error_response(
+            "Account is not verified",
+            401
+        )
+
+    access_token = create_access_token(
+        identity=str(user.id)
+    )
+
+    return success_response(
+        "Access token refreshed",
+        {
+            "access_token": access_token
+        }
+    )
 
 
 # ==========================================================
