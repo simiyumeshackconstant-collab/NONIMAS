@@ -3762,16 +3762,16 @@ def videos():
 # VIDEO VIEW
 # ==========================================================
 
-@api_bp.post("/videos/<int:video_id>/view")
+@api_bp.post("/videos/<int:post_id>/view")
 @jwt_required()
-def add_video_view(video_id):
+def add_video_view(post_id):
 
     user_id = int(
         get_jwt_identity()
     )
 
     video = Post.query.filter_by(
-        id=video_id,
+        id=post_id,
         media_type="video"
     ).first()
 
