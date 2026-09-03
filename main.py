@@ -1031,22 +1031,80 @@ def create_post_api():
         media_url = None
         media_type = None
 
+        # ======================================================
+        # MEDIA
+        # ======================================================
+
         if file and file.filename:
 
-            if "." not in file.filename:
-                return error_response(
-                    "Invalid file"
-                )
+            original_filename = file.filename.strip()
+
+            # --------------------------------------------------
+            # Get extension from filename
+            # --------------------------------------------------
 
             extension = os.path.splitext(
-                file.filename
+                original_filename
             )[1].lower()
 
-            filename = secure_filename(
-                f"{uuid.uuid4().hex}{extension}"
-            )
+            # --------------------------------------------------
+            # Get MIME type
+            # --------------------------------------------------
 
-            ext = extension.replace(".", "")
+            mime_type = (
+                file.mimetype or ""
+            ).lower()
+
+            # --------------------------------------------------
+            # If Android didn't provide an extension,
+            # determine it from MIME type.
+            # --------------------------------------------------
+
+            if not extension:
+
+                mime_extensions = {
+
+                    "image/jpeg": ".jpg",
+                    "image/jpg": ".jpg",
+                    "image/png": ".png",
+                    "image/gif": ".gif",
+                    "image/webp": ".webp",
+
+                    "video/mp4": ".mp4",
+                    "video/webm": ".webm",
+                    "video/quicktime": ".mov",
+
+                    "application/pdf": ".pdf",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx"
+                }
+
+                extension = mime_extensions.get(
+                    mime_type,
+                    ""
+                )
+
+            # --------------------------------------------------
+            # Still no extension = unsupported file
+            # --------------------------------------------------
+
+            if not extension:
+
+                return error_response(
+                    "Unable to determine file type"
+                )
+
+            # --------------------------------------------------
+            # Normalize extension
+            # --------------------------------------------------
+
+            ext = extension.replace(
+                ".",
+                ""
+            ).lower()
+
+            # --------------------------------------------------
+            # Supported types
+            # --------------------------------------------------
 
             image_extensions = {
                 "png",
@@ -1067,19 +1125,31 @@ def create_post_api():
                 "docx"
             }
 
+            # --------------------------------------------------
+            # Determine media type
+            # --------------------------------------------------
+
             if ext in image_extensions:
+
                 media_type = "image"
 
             elif ext in video_extensions:
+
                 media_type = "video"
 
             elif ext in document_extensions:
+
                 media_type = "file"
 
             else:
+
                 return error_response(
                     "Unsupported file type"
                 )
+
+            # --------------------------------------------------
+            # Upload to Cloudinary
+            # --------------------------------------------------
 
             upload = cloudinary.uploader.upload(
                 file,
@@ -1089,6 +1159,16 @@ def create_post_api():
             media_url = upload.get(
                 "secure_url"
             )
+
+            if not media_url:
+
+                raise Exception(
+                    "Media upload failed"
+                )
+
+        # ======================================================
+        # CREATE POST
+        # ======================================================
 
         post = Post(
 
@@ -1124,8 +1204,6 @@ def create_post_api():
             str(e),
             500
         )
-
-
 # ==========================================================
 # LIKE / UNLIKE
 # ==========================================================
@@ -3180,6 +3258,8 @@ def buy_gift():
 
 
 @api_bp.get("/gifts/count/<int:post_id>")
+@jwt_required()
+
 def gift_count(post_id):
 
     total = db.session.query(
