@@ -1207,6 +1207,9 @@ def create_post_api():
 # ==========================================================
 # LIKE / UNLIKE
 # ==========================================================
+# ==========================================================
+# LIKE / UNLIKE
+# ==========================================================
 
 @api_bp.post("/posts/<int:post_id>/like")
 @jwt_required()
@@ -1219,7 +1222,6 @@ def like_post_api(post_id):
     post = Post.query.get(post_id)
 
     if not post:
-
         return error_response(
             "Post not found",
             404
@@ -1232,51 +1234,24 @@ def like_post_api(post_id):
 
     if not like:
 
+        # First like
         like = Like(
             user_id=user_id,
             post_id=post_id,
             is_active=True,
-            rewarded=True
+            rewarded=False
         )
 
         db.session.add(like)
 
-        earning = Earning(
-            user_id=post.user_id,
-            amount=LIKE_EARN
-        )
-
-        db.session.add(earning)
-
-        add_to_wallet(
-            post.user_id,
-            LIKE_EARN
-        )
-
     else:
 
+        # Toggle like / unlike
         like.is_active = not like.is_active
 
-        if (
-            like.is_active
-            and not like.rewarded
-        ):
-
-            earning = Earning(
-                user_id=post.user_id,
-                amount=LIKE_EARN
-            )
-
-            db.session.add(earning)
-
-            add_to_wallet(
-                post.user_id,
-                LIKE_EARN
-            )
-
-            like.rewarded = True
-
-        db.session.commit()
+    # IMPORTANT:
+    # Commit the like/unlike change.
+    db.session.commit()
 
     total_likes = Like.query.filter_by(
         post_id=post_id,
@@ -1290,8 +1265,6 @@ def like_post_api(post_id):
             "likes": total_likes
         }
     )
-
-
 # ==========================================================
 # ADD COMMENT
 # ==========================================================
@@ -1338,19 +1311,6 @@ def add_comment_api(post_id):
     )
 
     db.session.add(comment)
-
-    earning = Earning(
-        user_id=post.user_id,
-        amount=COMMENT_EARN
-    )
-
-    db.session.add(earning)
-
-    add_to_wallet(
-        post.user_id,
-        COMMENT_EARN
-    )
-
     db.session.commit()
 
     total_comments = Comment.query.filter_by(

@@ -258,36 +258,6 @@ def like_post():
         )
 
         db.session.add(like)
-
-        # 💰 reward ONLY ONCE
-        earning = Earning(
-            user_id=post.user_id,
-            amount=LIKE_EARN
-        )
-
-        db.session.add(earning)
-
-        add_to_wallet(post.user_id, LIKE_EARN)
-
-    else:
-
-        # toggle active state
-        like.is_active = not like.is_active
-
-        # reward ONLY FIRST TIME
-        if like.is_active and not like.rewarded:
-
-            earning = Earning(
-                user_id=post.user_id,
-                amount=LIKE_EARN
-            )
-
-            db.session.add(earning)
-
-            add_to_wallet(post.user_id, LIKE_EARN)
-
-            like.rewarded = True
-
     db.session.commit()
 
     count = Like.query.filter_by(
@@ -324,19 +294,8 @@ def add_comment():
     )
 
     db.session.add(comment)
-
-    # 💰 creator earns per comment
-    earning = Earning(
-        user_id=post.user_id,
-        amount=COMMENT_EARN
-    )
-    db.session.add(earning)
-
-    # 💳 ADD TO WALLET (NEW)
-    add_to_wallet(post.user_id, COMMENT_EARN)
-
     db.session.commit()
-
+    
     total = Comment.query.filter_by(post_id=post_id).count()
 
     return jsonify({
