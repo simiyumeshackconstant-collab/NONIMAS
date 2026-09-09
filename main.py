@@ -1805,14 +1805,17 @@ def buddy_count_api():
             "count": count
         }
     )
-
 # ==========================================================
-# SEARCH BUDDIES
+# SEARCH USERS
 # ==========================================================
 
 @api_bp.post("/buddies/search")
 @jwt_required()
 def search_buddies_api():
+
+    current_user_id = int(
+        get_jwt_identity()
+    )
 
     data = request.get_json(
         silent=True
@@ -1823,45 +1826,72 @@ def search_buddies_api():
             "Invalid request"
         )
 
-    buddy_id = data.get("buddy_id")
-    buddy_name = data.get(
-        "buddy_name",
-        ""
+    buddy_name = str(
+        data.get(
+            "buddy_name",
+            ""
+        )
     ).strip()
 
-    if not buddy_id and not buddy_name:
+    if not buddy_name:
         return error_response(
-            "Buddy ID or name is required"
+            "User name is required"
         )
 
-    if buddy_id:
-        user = User.query.get(
-            buddy_id
-        )
-    else:
-        user = User.query.filter(
-            User.full_name.contains(
-                buddy_name
-            )
-        ).first()
+    # ======================================================
+    # SEARCH THE ENTIRE USER TABLE
+    #
+    # This is NOT limited to:
+    # - buddies
+    # - followers
+    # - following
+    # - suggestions
+    #
+    # It searches every registered user.
+    # ======================================================
 
-    if not user:
-        return error_response(
-            "User not found",
-            404
+    users = User.query.filter(
+        User.id != current_user_id,
+        User.full_name.ilike(
+            f"%{buddy_name}%"
         )
+    ).order_by(
+        User.full_name.asc()
+    ).all()
+
+    # ======================================================
+    # RETURN ALL MATCHES
+    # ======================================================
 
     return success_response(
         "Search completed",
-        [
-            {
-                "id": user.id,
-                "name": user.full_name,
-                "dp": user.user_dp_pic or "default_avatar.png"
-            }
-        ]
-    )
+        {
+            "count": len(users),
 
+            "users": [
+                {
+                    "id": user.id,
+
+                    "name": user.full_name,
+
+                    "dp":
+                        user.user_dp_pic
+                        or "default_avatar.png",
+
+                    "bio":
+                        user.bio or "",
+
+                    "is_online":
+                        user.is_online,
+
+                    "last_seen":
+                        user.last_seen
+                }
+
+                for user in users
+            ]
+        }
+    )
 
 # ==========================================================
 # MY BUDDIES
