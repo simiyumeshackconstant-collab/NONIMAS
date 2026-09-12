@@ -57,14 +57,13 @@ def admin_required(f):
 # ==========================================================
 # WALLET
 # ==========================================================
-
 def get_wallet(user_id):
     wallet = Wallet.query.filter_by(user_id=user_id).first()
 
     if wallet is None:
         wallet = Wallet(
             user_id=user_id,
-            balance=Decimal("0.00")
+            balance=0.0
         )
         db.session.add(wallet)
         db.session.commit()
@@ -75,17 +74,16 @@ def get_wallet(user_id):
 def add_to_wallet(user_id, amount):
     wallet = get_wallet(user_id)
 
-    wallet.balance += Decimal(str(amount))
+    wallet.balance += float(amount)
 
     db.session.commit()
 
     return wallet
 
-
 def deduct_from_wallet(user_id, amount):
     wallet = get_wallet(user_id)
 
-    amount = Decimal(str(amount))
+    amount = float(amount)
 
     if wallet.balance < amount:
         return False
@@ -95,8 +93,6 @@ def deduct_from_wallet(user_id, amount):
     db.session.commit()
 
     return True
-
-
 # ==========================================================
 # OTP
 # ==========================================================
