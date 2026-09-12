@@ -1059,7 +1059,7 @@ def paypal_access_token():
 def deposit():
 
     user_id = int(
-        get_jwt_identity()
+        session["user_id"]
     )
 
     data = request.get_json(
@@ -1183,7 +1183,7 @@ def deposit():
 @login_required
 def verify_deposit():
     user_id = int(
-        get_jwt_identity()
+        session["user_id"]
     )
 
     data = request.get_json(

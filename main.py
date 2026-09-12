@@ -3270,106 +3270,185 @@ def gift_count(post_id):
 @jwt_required()
 def send_gift():
 
-    data = request.get_json(silent=True)
+    try:
+        data = request.get_json(silent=True)
 
-    if not data:
-        return error_response("Invalid request")
+        if not data:
+            return error_response("Invalid request")
 
-    user_id = int(get_jwt_identity())
+        user_id = int(get_jwt_identity())
 
-    post_id = data.get("post_id")
-    gift_id = data.get("gift_id")
-    quantity = int(data.get("quantity", 1))
+        post_id = data.get("post_id")
+        gift_id = data.get("gift_id")
 
-    if not post_id:
-        return error_response("Post ID is required")
+        try:
+            quantity = int(data.get("quantity", 1))
+        except (TypeError, ValueError):
+            return error_response("Invalid quantity")
 
-    if not gift_id:
-        return error_response("Gift ID is required")
+        if not post_id:
+            return error_response("Post ID is required")
 
-    if quantity <= 0:
-        return error_response("Invalid quantity")
+        if not gift_id:
+            return error_response("Gift ID is required")
 
-    gift = Gift.query.get(gift_id)
-    post = Post.query.get(post_id)
+        if quantity <= 0:
+            return error_response("Invalid quantity")
 
-    if not gift or not post:
-        return error_response(
-            "Invalid gift or post"
-        )
+        # --------------------------------------------------
+        # GET POST AND GIFT
+        # --------------------------------------------------
 
-    gift_balance = UserGiftBalance.query.filter_by(
-        user_id=user_id,
-        gift_id=gift_id
-    ).with_for_update().first()
+        gift = Gift.query.get(int(gift_id))
+        post = Post.query.get(int(post_id))
 
-    if not gift_balance:
-        return error_response(
-            "You don't own this gift"
-        )
-
-    if gift_balance.quantity < quantity:
-        return error_response(
-            f"Only {gift_balance.quantity} left"
-        )
-
-    gift_balance.quantity -= quantity
-
-    if gift_balance.quantity <= 0:
-        db.session.delete(gift_balance)
-    elif gift_balance.quantity < 0:
-        gift_balance.quantity = 0
-
-    creator_earn = (
-        gift.payout * quantity
-        if hasattr(gift, "payout")
-        else 0
-    )
-
-    earning = Earning(
-        user_id=post.user_id,
-        amount=creator_earn
-    )
-
-    sender = User.query.get(user_id)
-
-    notification = Notification(
-        user_id=post.user_id,
-        title="Gift Received",
-        message=f"{sender.full_name} sent you {quantity} {gift.name}"
-    )
-
-    db.session.add(notification)
-    db.session.add(earning)
-
-    add_to_wallet(
-        post.user_id,
-        creator_earn
-    )
-
-    transaction = GiftTransaction(
-        sender_id=user_id,
-        receiver_id=post.user_id,
-        post_id=post_id,
-        gift_id=gift_id,
-        quantity=quantity,
-        total_amount=0
-    )
-
-    db.session.add(transaction)
-
-    db.session.commit()
-
-    return success_response(
-        "Gift sent successfully",
-        {
-            "remaining": (
-                gift_balance.quantity
-                if gift_balance.quantity > 0
-                else 0
+        if not gift or not post:
+            return error_response(
+                "Invalid gift or post"
             )
-        }
-    )
+
+        # --------------------------------------------------
+        # LOCK USER GIFT BALANCE
+        # --------------------------------------------------
+
+        gift_balance = (
+            UserGiftBalance.query
+            .filter_by(
+                user_id=user_id,
+                gift_id=int(gift_id)
+            )
+            .with_for_update()
+            .first()
+        )
+
+        if not gift_balance:
+            return error_response(
+                "You don't own this gift"
+            )
+
+        if gift_balance.quantity < quantity:
+            return error_response(
+                f"Only {gift_balance.quantity} left"
+            )
+
+        # --------------------------------------------------
+        # CALCULATE REMAINING BEFORE MODIFYING/DELETING
+        # --------------------------------------------------
+
+        remaining = gift_balance.quantity - quantity
+
+        # --------------------------------------------------
+        # DEDUCT GIFT
+        # --------------------------------------------------
+
+        if remaining <= 0:
+            remaining = 0
+            db.session.delete(gift_balance)
+        else:
+            gift_balance.quantity = remaining
+
+        # --------------------------------------------------
+        # CREATOR PAYOUT
+        # --------------------------------------------------
+
+        creator_earn = 0
+
+        if hasattr(gift, "payout") and gift.payout is not None:
+            creator_earn = gift.payout * quantity
+
+        # --------------------------------------------------
+        # SENDER
+        # --------------------------------------------------
+
+        sender = User.query.get(user_id)
+
+        if not sender:
+            db.session.rollback()
+
+            return error_response(
+                "Sender account not found"
+            )
+
+        # --------------------------------------------------
+        # EARNING
+        # --------------------------------------------------
+
+        earning = Earning(
+            user_id=post.user_id,
+            amount=creator_earn
+        )
+
+        db.session.add(earning)
+
+        # --------------------------------------------------
+        # WALLET
+        # --------------------------------------------------
+
+        if creator_earn > 0:
+            add_to_wallet(
+                post.user_id,
+                creator_earn
+            )
+
+        # --------------------------------------------------
+        # NOTIFICATION
+        # --------------------------------------------------
+
+        notification = Notification(
+            user_id=post.user_id,
+            title="Gift Received",
+            message=(
+                f"{sender.full_name} sent you "
+                f"{quantity} {gift.name}"
+            )
+        )
+
+        db.session.add(notification)
+
+        # --------------------------------------------------
+        # TRANSACTION
+        # --------------------------------------------------
+
+        transaction = GiftTransaction(
+            sender_id=user_id,
+            receiver_id=post.user_id,
+            post_id=int(post_id),
+            gift_id=int(gift_id),
+            quantity=quantity,
+            total_amount=0
+        )
+
+        db.session.add(transaction)
+
+        # --------------------------------------------------
+        # COMMIT
+        # --------------------------------------------------
+
+        db.session.commit()
+
+        # --------------------------------------------------
+        # SUCCESS
+        # --------------------------------------------------
+
+        return success_response(
+            "Gift sent successfully",
+            {
+                "remaining": remaining
+            }
+        )
+
+    except Exception as e:
+
+        db.session.rollback()
+
+        print(
+            "SEND GIFT API ERROR:",
+            repr(e)
+        )
+
+        return error_response(
+            f"Failed to send gift: {str(e)}"
+        )
 @api_bp.get("/gifts/my")
 @jwt_required()
 def my_gifts():
