@@ -3351,10 +3351,10 @@ def send_gift():
         # CREATOR PAYOUT
         # --------------------------------------------------
 
-        creator_earn = 0
+        creator_earn = 0.0
 
         if hasattr(gift, "payout") and gift.payout is not None:
-            creator_earn = gift.payout * quantity
+            creator_earn = float(gift.payout) * quantity
 
         # --------------------------------------------------
         # SENDER
