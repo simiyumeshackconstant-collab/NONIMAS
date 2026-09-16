@@ -138,6 +138,9 @@ class WithdrawalRequest(db.Model):
     account_name = db.Column(db.String(150))
     bank_name = db.Column(db.String(150))
     account_number = db.Column(db.String(100))
+    method = db.Column(db.String(20),nullable=False,default="bank")
+    paypal_email = db.Column(db.String(255),nullable=True)
+    phone_number = db.Column(db.String(50),nullable=True)
     status = db.Column(
         db.String(20),
         default="pending"

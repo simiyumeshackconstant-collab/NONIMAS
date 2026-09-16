@@ -2073,6 +2073,161 @@ def earnings_api():
     )
 
 # ==========================================================
+# COMPLETE PAYPAL DEPOSIT
+# ==========================================================
+
+def capture_paypal_deposit(order_id):
+    """
+    Capture a PayPal order and credit the associated wallet.
+
+    The DepositTransaction already contains the user_id,
+    amount and PayPal order ID, so this function does not
+    require a Flask session or JWT.
+    """
+
+    transaction = DepositTransaction.query.filter_by(
+        paypal_order_id=order_id
+    ).first()
+
+    if not transaction:
+        return {
+            "success": False,
+            "error": "Deposit transaction not found.",
+            "status_code": 404
+        }
+
+    # ------------------------------------------------------
+    # ALREADY PROCESSED
+    # ------------------------------------------------------
+
+    if transaction.status == "success":
+
+        wallet = Wallet.query.filter_by(
+            user_id=transaction.user_id
+        ).first()
+
+        return {
+            "success": True,
+            "already_processed": True,
+            "order_id": order_id,
+            "amount": transaction.amount,
+            "balance": (
+                wallet.balance
+                if wallet
+                else 0.0
+            )
+        }
+
+    # ------------------------------------------------------
+    # CAPTURE PAYPAL ORDER
+    # ------------------------------------------------------
+
+    try:
+        token = paypal_access_token()
+
+        response = requests.post(
+            f"{paypal_base_url()}/v2/checkout/orders/{order_id}/capture",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            timeout=30
+        )
+
+    except requests.RequestException as e:
+
+        current_app.logger.exception(
+            "PayPal capture request failed for %s",
+            order_id
+        )
+
+        return {
+            "success": False,
+            "error": "Unable to contact PayPal.",
+            "status_code": 502
+        }
+
+    # ------------------------------------------------------
+    # PAYPAL CAPTURE FAILED
+    # ------------------------------------------------------
+
+    if response.status_code not in (
+        200,
+        201
+    ):
+
+        try:
+            paypal_error = response.json()
+        except Exception:
+            paypal_error = response.text
+
+        current_app.logger.error(
+            "PayPal capture failed for %s: %s",
+            order_id,
+            paypal_error
+        )
+
+        return {
+            "success": False,
+            "error": f"PayPal capture failed: {paypal_error}",
+            "status_code": 400
+        }
+
+    capture = response.json()
+
+    # ------------------------------------------------------
+    # VERIFY PAYMENT STATUS
+    # ------------------------------------------------------
+
+    if capture.get("status") != "COMPLETED":
+
+        transaction.status = "failed"
+        db.session.commit()
+
+        return {
+            "success": False,
+            "error": "PayPal payment was not completed.",
+            "status_code": 400
+        }
+
+    # ------------------------------------------------------
+    # FIND / CREATE WALLET
+    # ------------------------------------------------------
+
+    wallet = Wallet.query.filter_by(
+        user_id=transaction.user_id
+    ).first()
+
+    if not wallet:
+
+        wallet = Wallet(
+            user_id=transaction.user_id,
+            balance=0.0
+        )
+
+        db.session.add(wallet)
+
+    # ------------------------------------------------------
+    # CREDIT WALLET
+    # ------------------------------------------------------
+
+    wallet.balance += transaction.amount
+
+    transaction.status = "success"
+
+    db.session.commit()
+
+    return {
+        "success": True,
+        "already_processed": False,
+        "order_id": order_id,
+        "amount": transaction.amount,
+        "balance": wallet.balance
+    }
+
+
+# ==========================================================
 # PAYPAL HELPERS
 # ==========================================================
 
@@ -2115,7 +2270,7 @@ def paypal_access_token():
 
 
 # ==========================================================
-# DEPOSIT
+# NATIVE APP - CREATE PAYPAL DEPOSIT
 # ==========================================================
 
 @api_bp.post("/wallet/deposit")
@@ -2136,13 +2291,11 @@ def deposit_api():
         )
 
     try:
-
         amount = float(
             data.get("amount", 0)
         )
 
     except Exception:
-
         return error_response(
             "Invalid amount"
         )
@@ -2160,49 +2313,122 @@ def deposit_api():
             404
         )
 
-    token = paypal_access_token()
+    # ------------------------------------------------------
+    # CREATE PAYPAL ORDER
+    # ------------------------------------------------------
 
-    payload = {
+    try:
 
-        "intent": "CAPTURE",
+        token = paypal_access_token()
 
-        "purchase_units": [
-            {
-                "amount": {
-                    "currency_code": "USD",
-                    "value": f"{amount:.2f}"
+        payload = {
+
+            "intent": "CAPTURE",
+
+            "purchase_units": [
+                {
+                    "amount": {
+                        "currency_code": "USD",
+                        "value": f"{amount:.2f}"
+                    }
                 }
+            ],
+
+            # --------------------------------------------------
+            # SAME PAYPAL APPLICATION CONTEXT AS WEB
+            # --------------------------------------------------
+
+            "application_context": {
+
+                "brand_name": "Nonimas",
+
+                "landing_page": "LOGIN",
+
+                "user_action": "PAY_NOW",
+
+                # IMPORTANT:
+                # This URL must point to the native PayPal
+                # return endpoint below.
+                "return_url": url_for(
+                    "api.paypal_return",
+                    _external=True
+                ),
+
+                "cancel_url": url_for(
+                    "api.paypal_cancel",
+                    _external=True
+                )
             }
-        ]
+        }
 
-    }
+        response = requests.post(
 
-    response = requests.post(
+            f"{paypal_base_url()}/v2/checkout/orders",
 
-        f"{paypal_base_url()}/v2/checkout/orders",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
 
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        },
+            json=payload,
 
-        json=payload,
+            timeout=30
+        )
 
-        timeout=30
+    except requests.RequestException as e:
 
-    )
+        current_app.logger.exception(
+            "PayPal order creation failed"
+        )
+
+        return error_response(
+            "Unable to contact PayPal.",
+            502
+        )
+
+    # ------------------------------------------------------
+    # PAYPAL ORDER CREATION FAILED
+    # ------------------------------------------------------
 
     if response.status_code not in (
         200,
         201
     ):
 
+        try:
+            paypal_error = response.json()
+        except Exception:
+            paypal_error = response.text
+
+        current_app.logger.error(
+            "PayPal order creation failed: %s",
+            paypal_error
+        )
+
         return error_response(
-            "Unable to create PayPal order",
+            "Unable to create PayPal order.",
             500
         )
 
     order = response.json()
+
+    order_id = order.get("id")
+
+    if not order_id:
+        current_app.logger.error(
+            "PayPal response did not contain order ID: %s",
+            order
+        )
+
+        return error_response(
+            "Invalid PayPal response.",
+            500
+        )
+
+    # ------------------------------------------------------
+    # FIND APPROVAL URL
+    # ------------------------------------------------------
 
     approval_url = None
 
@@ -2211,11 +2437,29 @@ def deposit_api():
         []
     ):
 
-        if link["rel"] == "approve":
+        if link.get("rel") == "approve":
 
-            approval_url = link["href"]
+            approval_url = link.get(
+                "href"
+            )
 
             break
+
+    if not approval_url:
+
+        current_app.logger.error(
+            "PayPal approval URL missing: %s",
+            order
+        )
+
+        return error_response(
+            "PayPal approval link was not returned.",
+            500
+        )
+
+    # ------------------------------------------------------
+    # SAVE PENDING TRANSACTION
+    # ------------------------------------------------------
 
     transaction = DepositTransaction(
 
@@ -2223,11 +2467,9 @@ def deposit_api():
 
         amount=amount,
 
-    
-        paypal_order_id=order["id"],
+        paypal_order_id=order_id,
 
         status="pending"
-
     )
 
     db.session.add(
@@ -2236,21 +2478,21 @@ def deposit_api():
 
     db.session.commit()
 
+    # ------------------------------------------------------
+    # RETURN TO NATIVE APP
+    # ------------------------------------------------------
+
     return success_response(
 
         "PayPal order created",
 
         {
-
-            "order_id": order["id"],
-
+            "order_id": order_id,
             "approval_url": approval_url
-
         }
-
     )
 # ==========================================================
-# VERIFY PAYPAL DEPOSIT
+# OPTIONAL: BACKWARD-COMPATIBLE VERIFY
 # ==========================================================
 
 @api_bp.post("/wallet/deposit/verify")
@@ -2284,104 +2526,136 @@ def verify_deposit_api():
     ).first()
 
     if not transaction:
-
         return error_response(
             "Transaction not found",
             404
         )
 
+    # Keep JWT ownership protection
     if transaction.user_id != user_id:
-
         return error_response(
             "Unauthorized",
             403
         )
 
-    if transaction.status == "success":
-
-        wallet = Wallet.query.filter_by(
-            user_id=user_id
-        ).first()
-
-        return success_response(
-            "Deposit already processed",
-            {
-                "balance": (
-                    wallet.balance
-                    if wallet
-                    else 0.0
-                )
-            }
-        )
-
-    token = paypal_access_token()
-
-    response = requests.post(
-
-        f"{paypal_base_url()}/v2/checkout/orders/{order_id}/capture",
-
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        },
-
-        timeout=30
-
+    result = capture_paypal_deposit(
+        order_id
     )
 
-    if response.status_code not in (
-        200,
-        201
-    ):
-
-        try:
-            message = response.json()
-        except Exception:
-            message = response.text
+    if not result["success"]:
 
         return error_response(
-            f"PayPal capture failed: {message}",
-            400
+            result["error"],
+            result.get(
+                "status_code",
+                400
+            )
         )
-
-    capture = response.json()
-
-    if capture.get("status") != "COMPLETED":
-
-        return error_response(
-            "Payment not completed."
-        )
-
-    wallet = Wallet.query.filter_by(
-        user_id=user_id
-    ).first()
-
-    if not wallet:
-
-        wallet = Wallet(
-            user_id=user_id,
-            balance=0.0
-        )
-
-        db.session.add(wallet)
-
-    wallet.balance += transaction.amount
-
-    transaction.status = "success"
-
-    db.session.commit()
 
     return success_response(
 
         "Deposit completed successfully",
 
         {
-            "order_id": order_id,
-            "amount": transaction.amount,
-            "balance": wallet.balance
+            "order_id": result["order_id"],
+            "amount": result["amount"],
+            "balance": result["balance"]
         }
-
     )
+
+
+
+@api_bp.get("/wallet/paypal/return")
+def paypal_return():
+
+    # PayPal returns the order ID as "token"
+    order_id = request.args.get(
+        "token"
+    )
+
+    if not order_id:
+
+        return error_response(
+            "PayPal order information is missing.",
+            400
+        )
+
+    current_app.logger.info(
+        "PayPal returned successfully for order %s",
+        order_id
+    )
+
+    # ------------------------------------------------------
+    # CAPTURE + CREDIT WALLET
+    # ------------------------------------------------------
+
+    result = capture_paypal_deposit(
+        order_id
+    )
+
+    if not result["success"]:
+
+        return error_response(
+            result["error"],
+            result.get(
+                "status_code",
+                400
+            )
+        )
+
+    # ------------------------------------------------------
+    # SUCCESS
+    # ------------------------------------------------------
+
+    return success_response(
+
+        "Deposit completed successfully",
+
+        {
+            "order_id": result["order_id"],
+
+            "amount": result["amount"],
+
+            "balance": result["balance"]
+        }
+    )
+
+
+# ==========================================================
+# NATIVE PAYPAL CANCEL
+# ==========================================================
+
+@api_bp.get("/wallet/paypal/cancel")
+def paypal_cancel():
+
+    order_id = request.args.get(
+        "token"
+    )
+
+    current_app.logger.info(
+        "PayPal payment cancelled. Order: %s",
+        order_id
+    )
+
+    if order_id:
+
+        transaction = DepositTransaction.query.filter_by(
+            paypal_order_id=order_id
+        ).first()
+
+        if transaction:
+
+            if transaction.status == "pending":
+
+                transaction.status = "cancelled"
+
+                db.session.commit()
+
+    return error_response(
+        "PayPal payment was cancelled.",
+        400
+    )
+
 # ==========================================================
 # WITHDRAW PAGE
 # ==========================================================
@@ -2420,6 +2694,9 @@ def withdraw_page_api():
                     "amount": withdrawal.amount,
                     "account_name": withdrawal.account_name,
                     "bank_name": withdrawal.bank_name,
+                    "phone_number": withdrawal.phone_number,
+                    "paypal_email": withdrawal.paypal_email,
+                    "method": withdrawal.method,
                     "account_number": withdrawal.account_number,
                     "status": withdrawal.status,
                     "created_at": (
@@ -2442,7 +2719,6 @@ def withdraw_page_api():
         }
     )
 
-
 # ==========================================================
 # REQUEST WITHDRAWAL
 # ==========================================================
@@ -2464,6 +2740,10 @@ def request_withdrawal_api():
             "Invalid request"
         )
 
+    # ------------------------------------------------------
+    # AMOUNT
+    # ------------------------------------------------------
+
     try:
 
         amount = float(
@@ -2479,33 +2759,160 @@ def request_withdrawal_api():
             "Invalid amount"
         )
 
+    if amount <= 0:
+
+        return error_response(
+            "Invalid amount"
+        )
+
+    # ------------------------------------------------------
+    # WALLET
+    # ------------------------------------------------------
+
     wallet = Wallet.query.filter_by(
         user_id=user_id
     ).first()
 
     if not wallet:
+
         return error_response(
             "Wallet not found",
             404
         )
 
-    if amount <= 0:
-        return error_response(
-            "Invalid amount"
-        )
-
     if wallet.balance < amount:
+
         return error_response(
             "Insufficient balance"
         )
 
-    withdrawal = WithdrawalRequest(
-        user_id=user_id,
-        amount=amount,
-        bank_name=data.get("bank_name"),
-        account_name=data.get("account_name"),
-        account_number=data.get("account_number")
-    )
+    # ------------------------------------------------------
+    # WITHDRAWAL METHOD
+    # ------------------------------------------------------
+
+    method = (
+        data.get("method")
+        or "bank"
+    ).strip().lower()
+
+    if method not in (
+        "bank",
+        "paypal"
+    ):
+
+        return error_response(
+            "Invalid withdrawal method. "
+            "Choose bank or paypal."
+        )
+
+    # ======================================================
+    # BANK WITHDRAWAL
+    # ======================================================
+
+    if method == "bank":
+
+        bank_name = (
+            data.get("bank_name")
+            or ""
+        ).strip()
+
+        account_name = (
+            data.get("account_name")
+            or ""
+        ).strip()
+
+        account_number = (
+            data.get("account_number")
+            or ""
+        ).strip()
+
+        if not bank_name:
+
+            return error_response(
+                "Bank name is required."
+            )
+
+        if not account_name:
+
+            return error_response(
+                "Account name is required."
+            )
+
+        if not account_number:
+
+            return error_response(
+                "Account number is required."
+            )
+
+        withdrawal = WithdrawalRequest(
+
+            user_id=user_id,
+
+            amount=amount,
+
+            method="bank",
+
+            bank_name=bank_name,
+
+            account_name=account_name,
+
+            account_number=account_number,
+
+            paypal_email=None,
+
+            phone_number=None
+        )
+
+    # ======================================================
+    # PAYPAL WITHDRAWAL
+    # ======================================================
+
+    else:
+
+        paypal_email = (
+            data.get("paypal_email")
+            or ""
+        ).strip()
+
+        phone_number = (
+            data.get("phone_number")
+            or ""
+        ).strip()
+
+        if not paypal_email:
+
+            return error_response(
+                "PayPal email is required."
+            )
+
+        if not phone_number:
+
+            return error_response(
+                "PayPal phone number is required."
+            )
+
+        withdrawal = WithdrawalRequest(
+
+            user_id=user_id,
+
+            amount=amount,
+
+            method="paypal",
+
+            bank_name=None,
+
+            account_name=None,
+
+            account_number=None,
+
+            paypal_email=paypal_email,
+
+            phone_number=phone_number
+        )
+
+    # ------------------------------------------------------
+    # SAVE WITHDRAWAL
+    # ------------------------------------------------------
 
     db.session.add(
         withdrawal
@@ -2514,13 +2921,24 @@ def request_withdrawal_api():
     db.session.commit()
 
     return success_response(
+
         "Withdrawal request submitted successfully",
+
         {
             "withdrawal_id": withdrawal.id,
+
+            "method": withdrawal.method,
+
+            "amount": withdrawal.amount,
+
             "status": withdrawal.status
         },
+
         201
     )
+
+
+
 # ==========================================================
 # CHAT
 # ==========================================================
