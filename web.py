@@ -1008,40 +1008,85 @@ def earnings():
         for e in rows
     ])
 
-
 # ==========================================================
-# PAYPAL HELPERS
+# PAYPAL
 # ==========================================================
 
 import base64
+import os
 import requests
 
+from flask import (
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for
+)
+
+
 def paypal_base_url():
-    if current_app.config["PAYPAL_MODE"] == "sandbox":
+    """
+    Returns the correct PayPal API base URL.
+
+    PAYPAL_MODE should be:
+        sandbox
+        live
+    """
+
+    mode = current_app.config.get(
+        "PAYPAL_MODE",
+        os.getenv("PAYPAL_MODE", "sandbox")
+    ).lower()
+
+    if mode == "sandbox":
         return "https://api-m.sandbox.paypal.com"
+
     return "https://api-m.paypal.com"
+
 
 def paypal_access_token():
 
+    client_id = current_app.config.get(
+        "PAYPAL_CLIENT_ID"
+    ) or os.getenv(
+        "PAYPAL_CLIENT_ID"
+    )
+
+    client_secret = current_app.config.get(
+        "PAYPAL_CLIENT_SECRET"
+    ) or os.getenv(
+        "PAYPAL_CLIENT_SECRET"
+    )
+
+    if not client_id or not client_secret:
+        raise RuntimeError(
+            "PayPal credentials are not configured."
+        )
+
     credentials = (
-        f'{current_app.config["PAYPAL_CLIENT_ID"]}:'
-        f'{current_app.config["PAYPAL_CLIENT_SECRET"]}'
+        f"{client_id}:{client_secret}"
     )
 
     encoded = base64.b64encode(
-        credentials.encode()
-    ).decode()
+        credentials.encode("utf-8")
+    ).decode("ascii")
 
     response = requests.post(
-        f"{paypal_base_url}/v1/oauth2/token",
+        f"{paypal_base_url()}/v1/oauth2/token",
+
         headers={
             "Authorization": f"Basic {encoded}",
             "Accept": "application/json",
-            "Accept-Language": "en_US"
+            "Accept-Language": "en_US",
         },
+
         data={
             "grant_type": "client_credentials"
         },
+
         timeout=30
     )
 
@@ -1051,236 +1096,20 @@ def paypal_access_token():
 
 
 # ==========================================================
-# DEPOSIT
+# DEPOSIT PAGE
 # ==========================================================
 
 @web_bp.route("/deposit", methods=["GET", "POST"])
 @login_required
 def deposit():
 
-    user_id = int(
-        session["user_id"]
-    )
-
-    data = request.get_json(
-        silent=True
-    )
-
-    if not data:
-        return error_response(
-            "Invalid request"
-        )
-
-    try:
-
-        amount = float(
-            data.get("amount", 0)
-        )
-
-    except Exception:
-
-        return error_response(
-            "Invalid amount"
-        )
-
-    if amount <= 0:
-        return error_response(
-            "Amount must be greater than zero."
-        )
-
-    user = User.query.get(user_id)
-
-    if not user:
-        return error_response(
-            "User not found",
-            404
-        )
-
-    token = paypal_access_token()
-
-    payload = {
-
-        "intent": "CAPTURE",
-
-        "purchase_units": [
-            {
-                "amount": {
-                    "currency_code": "USD",
-                    "value": f"{amount:.2f}"
-                }
-            }
-        ]
-
-    }
-
-    response = requests.post(
-
-        f"{paypal_base_url}/v2/checkout/orders",
-
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        },
-
-        json=payload,
-
-        timeout=30
-
-    )
-
-    if response.status_code not in (
-        200,
-        201
-    ):
-
-        return error_response(
-            "Unable to create PayPal order",
-            500
-        )
-
-    order = response.json()
-
-    approval_url = None
-
-    for link in order.get(
-        "links",
-        []
-    ):
-
-        if link["rel"] == "approve":
-
-            approval_url = link["href"]
-
-            break
-
-    transaction = DepositTransaction(
-
-        user_id=user_id,
-
-        amount=amount,
-
-        paypal_order_id=order["id"],
-
-        status="pending"
-
-    )
-
-    db.session.add(
-        transaction
-    )
-
-    db.session.commit()
-
-    return render_template(
-        "deposit.html",
-        wallet=wallet
-    )
-# ==========================================================
-# VERIFY PAYPAL DEPOSIT
-# ==========================================================
-
-@web_bp.route("/verify_deposit")
-@login_required
-def verify_deposit():
-    user_id = int(
-        session["user_id"]
-    )
-
-    data = request.get_json(
-        silent=True
-    )
-
-    if not data:
-        return error_response(
-            "Invalid request"
-        )
-
-    order_id = data.get(
-        "order_id"
-    )
-
-    if not order_id:
-        return error_response(
-            "Order ID is required"
-        )
-
-    transaction = DepositTransaction.query.filter_by(
-        paypal_order_id=order_id
-    ).first()
-
-    if not transaction:
-
-        return error_response(
-            "Transaction not found",
-            404
-        )
-
-    if transaction.user_id != user_id:
-
-        return error_response(
-            "Unauthorized",
-            403
-        )
-
-    if transaction.status == "success":
-
-        wallet = Wallet.query.filter_by(
-            user_id=user_id
-        ).first()
-
-        return success_response(
-            "Deposit already processed",
-            {
-                "balance": (
-                    wallet.balance
-                    if wallet
-                    else 0.0
-                )
-            }
-        )
-
-    token = paypal_access_token()
-
-    response = requests.post(
-
-        f"{PAYPAL_BASE_URL}/v2/checkout/orders/{order_id}/capture",
-
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        },
-
-        timeout=30
-
-    )
-
-    if response.status_code not in (
-        200,
-        201
-    ):
-
-        try:
-            message = response.json()
-        except Exception:
-            message = response.text
-
-        return error_response(
-            f"PayPal capture failed: {message}",
-            400
-        )
-
-    capture = response.json()
-
-    if capture.get("status") != "COMPLETED":
-
-        return error_response(
-            "Payment not completed."
-        )
+    user_id = int(session["user_id"])
 
     wallet = Wallet.query.filter_by(
         user_id=user_id
     ).first()
 
+    # Create wallet if it does not exist
     if not wallet:
 
         wallet = Wallet(
@@ -1289,14 +1118,521 @@ def verify_deposit():
         )
 
         db.session.add(wallet)
+        db.session.commit()
 
-    wallet.balance += transaction.amount
+    # ------------------------------------------------------
+    # GET
+    # ------------------------------------------------------
+    # Simply display the deposit page.
+    #
+    # The HTML form should POST amount to this same route.
+    # ------------------------------------------------------
 
-    transaction.status = "success"
+    if request.method == "GET":
 
-    db.session.commit()
+        return render_template(
+            "deposit.html",
+            wallet=wallet
+        )
 
-    return redirect(url_for("web.wallet_page"))
+    # ------------------------------------------------------
+    # POST
+    # ------------------------------------------------------
+
+    try:
+
+        amount = float(
+            request.form.get(
+                "amount",
+                0
+            )
+        )
+
+    except (TypeError, ValueError):
+
+        flash(
+            "Please enter a valid deposit amount.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.deposit")
+        )
+
+    if amount <= 0:
+
+        flash(
+            "Amount must be greater than zero.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.deposit")
+        )
+
+    # Optional safety limit
+    #
+    # Change/remove this according to your application.
+    #
+    # if amount > 10000:
+    #     flash("Maximum deposit is $10,000.", "error")
+    #     return redirect(url_for("web.deposit"))
+
+    user = User.query.get(user_id)
+
+    if not user:
+
+        flash(
+            "User not found.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.deposit")
+        )
+
+    # ------------------------------------------------------
+    # CREATE PAYPAL ORDER
+    # ------------------------------------------------------
+
+    try:
+
+        token = paypal_access_token()
+
+        payload = {
+
+            "intent": "CAPTURE",
+
+            "purchase_units": [
+                {
+                    "amount": {
+                        "currency_code": "USD",
+                        "value": f"{amount:.2f}"
+                    }
+                }
+            ],
+
+            "application_context": {
+
+                "brand_name": "Nonimas",
+
+                "landing_page": "LOGIN",
+
+                "user_action": "PAY_NOW",
+
+                "return_url": url_for(
+                    "web.paypal_return",
+                    _external=True
+                ),
+
+                "cancel_url": url_for(
+                    "web.paypal_cancel",
+                    _external=True
+                )
+            }
+        }
+
+        response = requests.post(
+
+            f"{paypal_base_url()}/v2/checkout/orders",
+
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+
+            json=payload,
+
+            timeout=30
+        )
+
+        if response.status_code not in (
+            200,
+            201
+        ):
+
+            try:
+                paypal_error = response.json()
+            except Exception:
+                paypal_error = response.text
+
+            current_app.logger.error(
+                "PayPal order creation failed: %s",
+                paypal_error
+            )
+
+            flash(
+                "Unable to create PayPal payment.",
+                "error"
+            )
+
+            return redirect(
+                url_for("web.deposit")
+            )
+
+        order = response.json()
+
+        order_id = order.get("id")
+
+        if not order_id:
+
+            current_app.logger.error(
+                "PayPal response did not contain order ID: %s",
+                order
+            )
+
+            flash(
+                "Invalid PayPal response.",
+                "error"
+            )
+
+            return redirect(
+                url_for("web.deposit")
+            )
+
+        # --------------------------------------------------
+        # SAVE PENDING TRANSACTION
+        # --------------------------------------------------
+
+        transaction = DepositTransaction(
+
+            user_id=user_id,
+
+            amount=amount,
+
+            paypal_order_id=order_id,
+
+            status="pending"
+        )
+
+        db.session.add(transaction)
+
+        db.session.commit()
+
+        # --------------------------------------------------
+        # FIND PAYPAL APPROVAL URL
+        # --------------------------------------------------
+
+        approval_url = None
+
+        for link in order.get("links", []):
+
+            if link.get("rel") == "approve":
+
+                approval_url = link.get("href")
+
+                break
+
+        if not approval_url:
+
+            current_app.logger.error(
+                "PayPal approval URL missing: %s",
+                order
+            )
+
+            flash(
+                "PayPal approval link was not returned.",
+                "error"
+            )
+
+            return redirect(
+                url_for("web.deposit")
+            )
+
+        # --------------------------------------------------
+        # SEND WEBVIEW TO PAYPAL
+        # --------------------------------------------------
+
+        return redirect(
+            approval_url
+        )
+
+    except requests.RequestException as e:
+
+        current_app.logger.exception(
+            "PayPal request failed"
+        )
+
+        flash(
+            "Unable to connect to PayPal.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.deposit")
+        )
+
+    except Exception as e:
+
+        current_app.logger.exception(
+            "Deposit creation failed"
+        )
+
+        flash(
+            "Unable to start deposit.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.deposit")
+        )
+
+
+# ==========================================================
+# PAYPAL RETURN
+# ==========================================================
+
+@web_bp.route("/paypal/return")
+@login_required
+def paypal_return():
+
+    user_id = int(
+        session["user_id"]
+    )
+
+    # PayPal returns the order ID as "token"
+    order_id = request.args.get(
+        "token"
+    )
+
+    payer_id = request.args.get(
+        "PayerID"
+    )
+
+    if not order_id:
+
+        flash(
+            "PayPal order information is missing.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.deposit")
+        )
+
+    # ------------------------------------------------------
+    # FIND TRANSACTION
+    # ------------------------------------------------------
+
+    transaction = DepositTransaction.query.filter_by(
+        paypal_order_id=order_id
+    ).first()
+
+    if not transaction:
+
+        flash(
+            "Deposit transaction not found.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.deposit")
+        )
+
+    # ------------------------------------------------------
+    # SECURITY CHECK
+    # ------------------------------------------------------
+
+    if transaction.user_id != user_id:
+
+        flash(
+            "Unauthorized transaction.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.wallet_page")
+        )
+
+    # ------------------------------------------------------
+    # ALREADY PROCESSED
+    # ------------------------------------------------------
+
+    if transaction.status == "success":
+
+        flash(
+            "Deposit already processed.",
+            "success"
+        )
+
+        return redirect(
+            url_for("web.wallet_page")
+        )
+
+    # ------------------------------------------------------
+    # CAPTURE PAYPAL ORDER
+    # ------------------------------------------------------
+
+    try:
+
+        token = paypal_access_token()
+
+        response = requests.post(
+
+            f"{paypal_base_url()}/v2/checkout/orders/{order_id}/capture",
+
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+
+            timeout=30
+        )
+
+        # --------------------------------------------------
+        # PAYPAL CAPTURE FAILED
+        # --------------------------------------------------
+
+        if response.status_code not in (
+            200,
+            201
+        ):
+
+            try:
+                paypal_error = response.json()
+            except Exception:
+                paypal_error = response.text
+
+            current_app.logger.error(
+                "PayPal capture failed for %s: %s",
+                order_id,
+                paypal_error
+            )
+
+            flash(
+                "PayPal payment could not be completed.",
+                "error"
+            )
+
+            return redirect(
+                url_for("web.deposit")
+            )
+
+        capture = response.json()
+
+        # --------------------------------------------------
+        # VERIFY PAYMENT STATUS
+        # --------------------------------------------------
+
+        if capture.get("status") != "COMPLETED":
+
+            transaction.status = "failed"
+
+            db.session.commit()
+
+            flash(
+                "PayPal payment was not completed.",
+                "error"
+            )
+
+            return redirect(
+                url_for("web.deposit")
+            )
+
+        # --------------------------------------------------
+        # GET WALLET
+        # --------------------------------------------------
+
+        wallet = Wallet.query.filter_by(
+            user_id=user_id
+        ).first()
+
+        if not wallet:
+
+            wallet = Wallet(
+                user_id=user_id,
+                balance=0.0
+            )
+
+            db.session.add(wallet)
+
+        # --------------------------------------------------
+        # CREDIT WALLET
+        # --------------------------------------------------
+
+        wallet.balance += transaction.amount
+
+        transaction.status = "success"
+
+        db.session.commit()
+
+        flash(
+            "Deposit successful.",
+            "success"
+        )
+
+        return redirect(
+            url_for("web.wallet_page")
+        )
+
+    except requests.RequestException:
+
+        current_app.logger.exception(
+            "PayPal capture request failed"
+        )
+
+        flash(
+            "Unable to verify your PayPal payment.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.deposit")
+        )
+
+    except Exception:
+
+        db.session.rollback()
+
+        current_app.logger.exception(
+            "PayPal return processing failed"
+        )
+
+        flash(
+            "Unable to process your deposit.",
+            "error"
+        )
+
+        return redirect(
+            url_for("web.deposit")
+        )
+
+
+# ==========================================================
+# PAYPAL CANCEL
+# ==========================================================
+
+@web_bp.route("/paypal/cancel")
+@login_required
+def paypal_cancel():
+
+    order_id = request.args.get(
+        "token"
+    )
+
+    if order_id:
+
+        transaction = DepositTransaction.query.filter_by(
+            paypal_order_id=order_id,
+            user_id=session["user_id"]
+        ).first()
+
+        if transaction and transaction.status == "pending":
+
+            transaction.status = "cancelled"
+
+            db.session.commit()
+
+    flash(
+        "PayPal payment was cancelled.",
+        "warning"
+    )
+
+    return redirect(
+        url_for("web.deposit")
+    )
 @web_bp.route("/withdraw")
 @login_required
 def withdraw_page():
