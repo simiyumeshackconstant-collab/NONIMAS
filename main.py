@@ -2239,7 +2239,6 @@ def paypal_base_url():
         return "https://api-m.sandbox.paypal.com"
     return "https://api-m.paypal.com"
 
-
 def paypal_access_token():
 
     credentials = (
@@ -2251,24 +2250,61 @@ def paypal_access_token():
         credentials.encode()
     ).decode()
 
-    response = requests.post(
-        f"{paypal_base_url()}/v1/oauth2/token",
-        headers={
-            "Authorization": f"Basic {encoded}",
-            "Accept": "application/json",
-            "Accept-Language": "en_US"
-        },
-        data={
-            "grant_type": "client_credentials"
-        },
-        timeout=30
-    )
+    try:
 
-    response.raise_for_status()
+        response = requests.post(
+            f"{paypal_base_url()}/v1/oauth2/token",
+            headers={
+                "Authorization": f"Basic {encoded}",
+                "Accept": "application/json",
+                "Accept-Language": "en_US"
+            },
+            data={
+                "grant_type": "client_credentials"
+            },
+            timeout=30
+        )
 
-    return response.json()["access_token"]
+    except requests.RequestException as e:
 
+        current_app.logger.exception(
+            "PayPal OAuth request failed"
+        )
 
+        raise
+
+    if response.status_code != 200:
+
+        try:
+            paypal_error = response.json()
+        except Exception:
+            paypal_error = response.text
+
+        current_app.logger.error(
+            "PayPal OAuth failed: %s",
+            paypal_error
+        )
+
+        raise RuntimeError(
+            f"PayPal authentication failed: {paypal_error}"
+        )
+
+    data = response.json()
+
+    access_token = data.get("access_token")
+
+    if not access_token:
+
+        current_app.logger.error(
+            "PayPal OAuth response missing access token: %s",
+            data
+        )
+
+        raise RuntimeError(
+            "PayPal access token was not returned."
+        )
+
+    return access_token
 # ==========================================================
 # NATIVE APP - CREATE PAYPAL DEPOSIT
 # ==========================================================
@@ -2318,11 +2354,11 @@ def deposit_api():
     # ------------------------------------------------------
 
     try:
+        
 
         token = paypal_access_token()
 
         payload = {
-
             "intent": "CAPTURE",
 
             "purchase_units": [
@@ -2334,10 +2370,6 @@ def deposit_api():
                 }
             ],
 
-            # --------------------------------------------------
-            # SAME PAYPAL APPLICATION CONTEXT AS WEB
-            # --------------------------------------------------
-
             "application_context": {
 
                 "brand_name": "Nonimas",
@@ -2346,9 +2378,6 @@ def deposit_api():
 
                 "user_action": "PAY_NOW",
 
-                # IMPORTANT:
-                # This URL must point to the native PayPal
-                # return endpoint below.
                 "return_url": url_for(
                     "api.paypal_return",
                     _external=True
@@ -2360,9 +2389,16 @@ def deposit_api():
                 )
             }
         }
+    
+    
+
+        current_app.logger.info(
+            "Creating PayPal order for user=%s amount=%s",
+             user_id,
+            amount
+        )
 
         response = requests.post(
-
             f"{paypal_base_url()}/v2/checkout/orders",
 
             headers={
@@ -2379,13 +2415,25 @@ def deposit_api():
     except requests.RequestException as e:
 
         current_app.logger.exception(
-            "PayPal order creation failed"
+            "PayPal request failed"
         )
 
         return error_response(
             "Unable to contact PayPal.",
             502
         )
+
+    except Exception as e:
+
+        current_app.logger.exception(
+            "Unexpected PayPal deposit error"
+        )
+
+        return error_response(
+            str(e),
+            500
+        )
+    
 
     # ------------------------------------------------------
     # PAYPAL ORDER CREATION FAILED
