@@ -3,7 +3,7 @@ from decimal import Decimal
 import uuid
 import os
 
-from flask import Blueprint, request, jsonify, current_app,url_for
+from flask import Blueprint, request, jsonify, current_app,url_for, redirect
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -2617,15 +2617,11 @@ def verify_deposit_api():
 def paypal_return():
 
     # PayPal returns the order ID as "token"
-    order_id = request.args.get(
-        "token"
-    )
+    order_id = request.args.get("token")
 
     if not order_id:
-
-        return error_response(
-            "PayPal order information is missing.",
-            400
+        return redirect(
+            "nonimas://paypal-return?status=failed"
         )
 
     current_app.logger.info(
@@ -2643,42 +2639,39 @@ def paypal_return():
 
     if not result["success"]:
 
-        return error_response(
-            result["error"],
-            result.get(
-                "status_code",
-                400
-            )
+        current_app.logger.error(
+            "PayPal deposit failed for %s: %s",
+            order_id,
+            result["error"]
+        )
+
+        return redirect(
+            "nonimas://paypal-return"
+            "?status=failed"
+            f"&order_id={order_id}"
         )
 
     # ------------------------------------------------------
     # SUCCESS
     # ------------------------------------------------------
 
-    return success_response(
-
-        "Deposit completed successfully",
-
-        {
-            "order_id": result["order_id"],
-
-            "amount": result["amount"],
-
-            "balance": result["balance"]
-        }
+    current_app.logger.info(
+        "Deposit completed successfully for order %s",
+        order_id
     )
 
-
+    return redirect(
+        "nonimas://paypal-return"
+        "?status=success"
+        f"&order_id={order_id}"
+    )
 # ==========================================================
 # NATIVE PAYPAL CANCEL
 # ==========================================================
-
 @api_bp.get("/wallet/paypal/cancel")
 def paypal_cancel():
 
-    order_id = request.args.get(
-        "token"
-    )
+    order_id = request.args.get("token")
 
     current_app.logger.info(
         "PayPal payment cancelled. Order: %s",
@@ -2699,11 +2692,10 @@ def paypal_cancel():
 
                 db.session.commit()
 
-    return error_response(
-        "PayPal payment was cancelled.",
-        400
+    return redirect(
+        "nonimas://paypal-return"
+        "?status=cancelled"
     )
-
 # ==========================================================
 # WITHDRAW PAGE
 # ==========================================================
