@@ -2987,155 +2987,172 @@ def request_withdrawal_api():
 @jwt_required()
 def get_chats():
 
-    try:
+    user_id = int(get_jwt_identity())
 
-        user_id = int(get_jwt_identity())
+    # ------------------------------------------------------
+    # GET EVERYONE WHO IS EITHER:
+    # 1. Added by me
+    # 2. Has added me
+    # ------------------------------------------------------
 
-        # Get all messages involving the logged-in user.
-        messages = ChatMessage.query.filter(
-            (
-                (ChatMessage.sender_id == user_id) |
-                (ChatMessage.receiver_id == user_id)
-            )
-        ).order_by(
-            ChatMessage.created_at.desc()
-        ).all()
+    outgoing = Buddy.query.filter_by(
+        user_id=user_id
+    ).all()
 
-        conversations = {}
+    incoming = Buddy.query.filter_by(
+        buddy_id=user_id
+    ).all()
 
-        for message in messages:
+    buddy_ids = {
+        buddy.buddy_id
+        for buddy in outgoing
+    }
 
-            if message.sender_id == user_id:
-                other_user_id = message.receiver_id
-            else:
-                other_user_id = message.sender_id
+    buddy_ids.update(
+        buddy.user_id
+        for buddy in incoming
+    )
 
-            # Keep only the newest message for each conversation.
-            if other_user_id not in conversations:
-                conversations[other_user_id] = message
-
-        chats = []
-
-        for other_user_id, last_message in conversations.items():
-
-            other_user = User.query.get(other_user_id)
-
-            if not other_user:
-                continue
-
-            unread_count = ChatMessage.query.filter(
-                ChatMessage.sender_id == other_user_id,
-                ChatMessage.receiver_id == user_id,
-                ChatMessage.is_read == False
-            ).count()
-
-            # Safely get profile picture in case the User model
-            # uses a slightly different field or does not have one.
-            avatar = getattr(
-                other_user,
-                "profile_picture",
-                None
-            )
-
-            # Some projects may use profile_picture_url instead.
-            if not avatar:
-                avatar = getattr(
-                    other_user,
-                    "profile_picture_url",
-                    None
-                )
-
-            last_seen = (
-                other_user.last_seen.strftime("%H:%M")
-                if getattr(
-                    other_user,
-                    "last_seen",
-                    None
-                )
-                else "recently"
-            )
-
-            online = bool(
-                getattr(
-                    other_user,
-                    "is_online",
-                    False
-                )
-            )
-
-            last_message_text = (
-                last_message.message
-                or ""
-            )
-
-            # Display media-only messages properly.
-            if (
-                not last_message_text
-                and last_message.media_type
-            ):
-
-                if last_message.media_type == "image":
-                    last_message_text = "Photo"
-
-                elif last_message.media_type == "video":
-                    last_message_text = "Video"
-
-                elif last_message.media_type == "pdf":
-                    last_message_text = "PDF"
-
-                else:
-                    last_message_text = "Attachment"
-
-            chats.append(
-                {
-                    "id": other_user_id,
-
-                    "name": getattr(
-                        other_user,
-                        "name",
-                        ""
-                    ),
-
-                    "avatar": avatar,
-
-                    "online": online,
-
-                    "typing": False,
-
-                    "last_seen": last_seen,
-
-                    "last_message": last_message_text,
-
-                    "last_message_time": (
-                        last_message.created_at.strftime(
-                            "%Y-%m-%d %H:%M"
-                        )
-                        if last_message.created_at
-                        else ""
-                    ),
-
-                    "unread_count": unread_count
-                }
-            )
-
+    if not buddy_ids:
         return success_response(
-            "Chats retrieved successfully",
+            "Chats loaded",
             {
-                "chats": chats
+                "chats": []
             }
         )
 
-    except Exception as e:
+    users = User.query.filter(
+        User.id.in_(buddy_ids)
+    ).all()
 
-        print(
-            "GET CHATS ERROR:",
-            e
+    chats = []
+
+    for other_user in users:
+
+        # --------------------------------------------------
+        # FIND LATEST MESSAGE THAT IS NOT HIDDEN FOR ME
+        # --------------------------------------------------
+
+        latest_message = (
+            ChatMessage.query
+            .filter(
+                (
+                    (ChatMessage.sender_id == user_id) &
+                    (ChatMessage.receiver_id == other_user.id)
+                )
+                |
+                (
+                    (ChatMessage.sender_id == other_user.id) &
+                    (ChatMessage.receiver_id == user_id)
+                )
+            )
+            .order_by(
+                ChatMessage.created_at.desc()
+            )
+            .first()
         )
 
-        return error_response(
-            str(e),
-            500
-        )
+        # --------------------------------------------------
+        # LAST MESSAGE
+        # --------------------------------------------------
+
+        last_message = ""
+        last_message_time = ""
+
+        if latest_message:
+
+            # If you implement the two deletion flags described
+            # below, skip a message hidden for this user.
+
+            hidden_for_me = False
+
+            if latest_message.sender_id == user_id:
+                hidden_for_me = getattr(
+                    latest_message,
+                    "deleted_for_sender",
+                    False
+                )
+            else:
+                hidden_for_me = getattr(
+                    latest_message,
+                    "deleted_for_receiver",
+                    False
+                )
+
+            if not hidden_for_me:
+
+                last_message = (
+                    latest_message.message
+                    or ""
+                )
+
+                if latest_message.media_url:
+
+                    if latest_message.media_type == "image":
+                        last_message = "📷 Photo"
+
+                    elif latest_message.media_type == "video":
+                        last_message = "🎥 Video"
+
+                    elif latest_message.media_type == "audio":
+                        last_message = "🎤 Voice note"
+
+                    elif latest_message.media_type in (
+                        "pdf",
+                        "doc",
+                        "document"
+                    ):
+                        last_message = "📎 Document"
+
+                if latest_message.created_at:
+                    last_message_time = (
+                        latest_message.created_at
+                        .strftime("%H:%M")
+                    )
+
+        # --------------------------------------------------
+        # UNREAD
+        # --------------------------------------------------
+
+        unread_count = ChatMessage.query.filter(
+            ChatMessage.sender_id == other_user.id,
+            ChatMessage.receiver_id == user_id,
+            ChatMessage.is_read == False
+        ).count()
+
+        chats.append({
+            "id": other_user.id,
+            "name": other_user.full_name,
+            "avatar": (
+                other_user.user_dp_pic
+                or "default_avatar.png"
+            ),
+            "online": bool(
+                other_user.is_online
+            ),
+            "typing": False,
+            "last_seen": (
+                other_user.last_seen.strftime("%H:%M")
+                if other_user.last_seen
+                else ""
+            ),
+            "last_message": last_message,
+            "last_message_time": last_message_time,
+            "unread_count": unread_count
+        })
+
+    # Conversations with a latest message first.
+    chats.sort(
+        key=lambda x: x["last_message_time"] or "",
+        reverse=True
+    )
+
+    return success_response(
+        "Chats loaded",
+        {
+            "chats": chats
+        }
+    )
 @api_bp.post("/chat/send")
 @jwt_required()
 def send_message():
@@ -3172,22 +3189,28 @@ def send_message():
         media_url = None
         media_type = None
 
-        if file and file.filename:
+        if file:
 
-            upload = cloudinary.uploader.upload(
+            uploaded = cloudinary.uploader.upload(
                 file,
                 resource_type="auto"
             )
 
-            media_url = upload["secure_url"]
+            media_url = uploaded.get("secure_url")
 
-            mime = file.mimetype or ""
+            mime = (
+                file.mimetype
+                or ""
+            ).lower()
 
             if mime.startswith("image/"):
                 media_type = "image"
 
             elif mime.startswith("video/"):
                 media_type = "video"
+
+            elif mime.startswith("audio/"):
+                media_type = "audio"
 
             elif mime == "application/pdf":
                 media_type = "pdf"

@@ -108,6 +108,8 @@ class ChatMessage(db.Model):
     message = db.Column(db.Text)
     is_read = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    deleted_for_sender = db.Column(db.Boolean,nullable=False,default=False)
+    deleted_for_receiver = db.Column(db.Boolean,nullable=False,default=False)
 class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, nullable=False)
