@@ -3344,11 +3344,13 @@ def get_messages(other_user):
     messages = ChatMessage.query.filter(
         (
             (ChatMessage.sender_id == user_id) &
-            (ChatMessage.receiver_id == other_user)
+            (ChatMessage.receiver_id == other_user)&
+            (~ChatMessage.deleted_for_sender)
         ) |
         (
             (ChatMessage.sender_id == other_user) &
-            (ChatMessage.receiver_id == user_id)
+            (ChatMessage.receiver_id == user_id) &
+            (ChatMessage.deleted_for_receiver == False)
         )
     ).order_by(
         ChatMessage.created_at.asc()
@@ -3417,32 +3419,26 @@ def get_messages(other_user):
 @jwt_required()
 def clear_chat():
 
-    data = request.get_json(silent=True)
+    user_id = int(
+        get_jwt_identity()
+    )
 
-    if not data:
-        return error_response("Invalid request")
+    data = request.get_json(
+        silent=True
+    ) or {}
 
-    other_user = data.get("other_user")
+    other_user = data.get(
+        "other_user"
+    )
 
     if not other_user:
-        return error_response("Other user is required")
-
-    try:
-        other_user = int(other_user)
-    except ValueError:
-        return error_response("Invalid user")
-
-    user_id = int(get_jwt_identity())
-
-    other = User.query.get(other_user)
-
-    if not other:
         return error_response(
-            "User not found",
-            404
+            "Other user is required"
         )
 
-    ChatMessage.query.filter(
+    other_user = int(other_user)
+
+    messages = ChatMessage.query.filter(
         (
             (ChatMessage.sender_id == user_id) &
             (ChatMessage.receiver_id == other_user)
@@ -3452,24 +3448,84 @@ def clear_chat():
             (ChatMessage.sender_id == other_user) &
             (ChatMessage.receiver_id == user_id)
         )
-    ).delete(synchronize_session=False)
+    ).all()
+
+    for message in messages:
+
+        if message.sender_id == user_id:
+            message.deleted_for_sender = True
+
+        else:
+            message.deleted_for_receiver = True
 
     db.session.commit()
 
     socketio.emit(
-        "chat_cleared",
+        "chat_cleared_for_me",
         {
-            "user1": user_id,
-            "user2": other_user
+            "user_id": user_id
         },
+        room=str(user_id)
+    )
+
+    return success_response(
+        "Chat deleted for you"
+    )
+@api_bp.delete("/chat/clear-everyone")
+@jwt_required()
+def clear_chat_everyone():
+
+    user_id = int(
+        get_jwt_identity()
+    )
+
+    data = request.get_json(
+        silent=True
+    ) or {}
+
+    other_user = data.get(
+        "other_user"
+    )
+
+    if not other_user:
+        return error_response(
+            "Other user is required"
+        )
+
+    other_user = int(other_user)
+
+    messages = ChatMessage.query.filter(
+        (
+            (ChatMessage.sender_id == user_id) &
+            (ChatMessage.receiver_id == other_user)
+        )
+        |
+        (
+            (ChatMessage.sender_id == other_user) &
+            (ChatMessage.receiver_id == user_id)
+        )
+    ).all()
+
+    for message in messages:
+        message.deleted_for_sender = True
+        message.deleted_for_receiver = True
+
+    db.session.commit()
+
+    payload = {
+        "user_id": user_id,
+        "other_user": other_user
+    }
+
+    socketio.emit(
+        "chat_cleared_everyone",
+        payload,
         room=str(other_user)
     )
 
     return success_response(
-        "Chat cleared successfully"
+        "Chat deleted for everyone"
     )
-
-
 @api_bp.get("/chat/unread")
 @jwt_required()
 def unread_counts():
@@ -3505,41 +3561,91 @@ def unread_counts():
 @socketio.on("connect")
 def handle_connect(auth):
 
+    token = None
+
+    if isinstance(auth, dict):
+        token = auth.get("token")
+
+    if not token:
+        return False
+
     try:
-
-        if not auth or "token" not in auth:
-            disconnect()
-            return
-
-        token = auth["token"]
-
-        decoded = decode_token(token)
-
-        user_id = int(decoded["sub"])
-
-        user = User.query.get(user_id)
-
-        if not user:
-            disconnect()
-            return
-
-        user.is_online = True
-        user.last_seen = datetime.utcnow()
-
-        db.session.commit()
-
-        join_room(str(user_id))
-
+        user_id = int(
+            decode_token(token)["sub"]
+        )
     except Exception:
-        disconnect()
+        return False
 
+    user = User.query.get(user_id)
 
+    if not user:
+        return False
+
+    connected_users.setdefault(
+        user_id,
+        set()
+    ).add(
+        request.sid
+    )
+
+    user.is_online = True
+    user.last_seen = datetime.utcnow()
+
+    db.session.commit()
+
+    join_room(str(user_id))
+
+    socketio.emit(
+        "user_status",
+        {
+            "user_id": user_id,
+            "online": True,
+            "last_seen": None
+        }
+    )
 @socketio.on("disconnect")
 def handle_disconnect():
 
-    pass
+    disconnected_user = None
 
+    for user_id, sessions in list(
+        connected_users.items()
+    ):
 
+        if request.sid in sessions:
+
+            sessions.remove(
+                request.sid
+            )
+
+            disconnected_user = user_id
+
+            if not sessions:
+                del connected_users[user_id]
+
+                user = User.query.get(
+                    user_id
+                )
+
+                if user:
+                    user.is_online = False
+                    user.last_seen = datetime.utcnow()
+
+                    db.session.commit()
+
+                    socketio.emit(
+                        "user_status",
+                        {
+                            "user_id": user_id,
+                            "online": False,
+                            "last_seen":
+                                user.last_seen.strftime(
+                                    "%H:%M"
+                                )
+                        }
+                    )
+
+            break    
 @socketio.on("join")
 def handle_join(auth):
 
@@ -3559,55 +3665,55 @@ def handle_join(auth):
     except Exception:
         return
 
-
 @socketio.on("typing")
-def typing(data):
+def handle_typing(data):
 
-    try:
+    receiver_id = data.get(
+        "receiver_id"
+    )
 
-        token = data.get("token")
-
-        receiver = int(data["receiver"])
-
-        decoded = decode_token(token)
-
-        user_id = int(decoded["sub"])
-
-        socketio.emit(
-            "typing",
-            {
-                "user": user_id
-            },
-            room=str(receiver)
-        )
-
-    except Exception:
+    if not receiver_id:
         return
 
+    sender_id = connected_socket_user(
+        request.sid
+    )
 
+    if not sender_id:
+        return
+
+    socketio.emit(
+        "typing",
+        {
+            "user_id": sender_id
+        },
+        room=str(receiver_id)
+    )
+        return
 @socketio.on("stop_typing")
-def stop_typing(data):
+def handle_stop_typing(data):
 
-    try:
+    receiver_id = data.get(
+        "receiver_id"
+    )
 
-        token = data.get("token")
-
-        receiver = int(data["receiver"])
-
-        decoded = decode_token(token)
-
-        user_id = int(decoded["sub"])
-
-        socketio.emit(
-            "stop_typing",
-            {
-                "user": user_id
-            },
-            room=str(receiver)
-        )
-
-    except Exception:
+    if not receiver_id:
         return
+
+    sender_id = connected_socket_user(
+        request.sid
+    )
+
+    if not sender_id:
+        return
+
+    socketio.emit(
+        "stop_typing",
+        {
+            "user_id": sender_id
+        },
+        room=str(receiver_id)
+    )       
 # ==========================================================
 # GIFTS
 # ==========================================================
