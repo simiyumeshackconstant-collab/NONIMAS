@@ -2982,7 +2982,6 @@ def request_withdrawal_api():
 # ==========================================================
 # CHAT
 # ==========================================================
-
 @api_bp.get("/chat")
 @jwt_required()
 def get_chats():
@@ -2990,9 +2989,9 @@ def get_chats():
     user_id = int(get_jwt_identity())
 
     # ------------------------------------------------------
-    # GET EVERYONE WHO IS EITHER:
+    # USERS WHO ARE EITHER:
     # 1. Added by me
-    # 2. Has added me
+    # 2. Have added me
     # ------------------------------------------------------
 
     outgoing = Buddy.query.filter_by(
@@ -3030,10 +3029,10 @@ def get_chats():
     for other_user in users:
 
         # --------------------------------------------------
-        # FIND LATEST MESSAGE THAT IS NOT HIDDEN FOR ME
+        # FIND NEWEST MESSAGE VISIBLE TO CURRENT USER
         # --------------------------------------------------
 
-        latest_message = (
+        conversation_messages = (
             ChatMessage.query
             .filter(
                 (
@@ -3049,8 +3048,35 @@ def get_chats():
             .order_by(
                 ChatMessage.created_at.desc()
             )
-            .first()
+            .all()
         )
+
+        latest_message = None
+
+        for candidate in conversation_messages:
+
+            # Message sent by me
+            if candidate.sender_id == user_id:
+
+                if getattr(
+                    candidate,
+                    "deleted_for_sender",
+                    False
+                ):
+                    continue
+
+            # Message sent by the other user
+            else:
+
+                if getattr(
+                    candidate,
+                    "deleted_for_receiver",
+                    False
+                ):
+                    continue
+
+            latest_message = candidate
+            break
 
         # --------------------------------------------------
         # LAST MESSAGE
@@ -3058,99 +3084,233 @@ def get_chats():
 
         last_message = ""
         last_message_time = ""
+        latest_timestamp = None
 
         if latest_message:
 
-            # If you implement the two deletion flags described
-            # below, skip a message hidden for this user.
+            last_message = (
+                latest_message.message
+                or ""
+            )
 
-            hidden_for_me = False
+            if latest_message.media_url:
 
-            if latest_message.sender_id == user_id:
-                hidden_for_me = getattr(
-                    latest_message,
-                    "deleted_for_sender",
-                    False
+                if latest_message.media_type == "image":
+                    last_message = "📷 Photo"
+
+                elif latest_message.media_type == "video":
+                    last_message = "🎥 Video"
+
+                elif latest_message.media_type == "audio":
+                    last_message = "🎤 Voice note"
+
+                elif latest_message.media_type in (
+                    "pdf",
+                    "doc",
+                    "document"
+                ):
+                    last_message = "📎 Document"
+
+            if latest_message.created_at:
+
+                latest_timestamp = (
+                    latest_message.created_at
                 )
-            else:
-                hidden_for_me = getattr(
-                    latest_message,
-                    "deleted_for_receiver",
-                    False
+
+                last_message_time = (
+                    latest_message.created_at
+                    .strftime("%H:%M")
                 )
-
-            if not hidden_for_me:
-
-                last_message = (
-                    latest_message.message
-                    or ""
-                )
-
-                if latest_message.media_url:
-
-                    if latest_message.media_type == "image":
-                        last_message = "📷 Photo"
-
-                    elif latest_message.media_type == "video":
-                        last_message = "🎥 Video"
-
-                    elif latest_message.media_type == "audio":
-                        last_message = "🎤 Voice note"
-
-                    elif latest_message.media_type in (
-                        "pdf",
-                        "doc",
-                        "document"
-                    ):
-                        last_message = "📎 Document"
-
-                if latest_message.created_at:
-                    last_message_time = (
-                        latest_message.created_at
-                        .strftime("%H:%M")
-                    )
 
         # --------------------------------------------------
         # UNREAD
         # --------------------------------------------------
 
-        unread_count = ChatMessage.query.filter(
-            ChatMessage.sender_id == other_user.id,
-            ChatMessage.receiver_id == user_id,
-            ChatMessage.is_read == False
-        ).count()
+        unread_count = (
+            ChatMessage.query
+            .filter(
+                ChatMessage.sender_id == other_user.id,
+                ChatMessage.receiver_id == user_id,
+                ChatMessage.is_read == False,
+                ChatMessage.deleted_for_receiver == False
+            )
+            .count()
+        )
 
         chats.append({
+
             "id": other_user.id,
-            "name": other_user.full_name,
-            "avatar": (
-                other_user.user_dp_pic
-                or "default_avatar.png"
-            ),
-            "online": bool(
-                other_user.is_online
-            ),
-            "typing": False,
-            "last_seen": (
-                other_user.last_seen.strftime("%H:%M")
-                if other_user.last_seen
-                else ""
-            ),
-            "last_message": last_message,
-            "last_message_time": last_message_time,
-            "unread_count": unread_count
+
+            "name":
+                other_user.full_name,
+
+            "avatar":
+                (
+                    other_user.user_dp_pic
+                    or "default_avatar.png"
+                ),
+
+            # ----------------------------------------------
+            # CURRENT ONLINE STATUS
+            # ----------------------------------------------
+
+            "online":
+                bool(other_user.is_online),
+
+            # ----------------------------------------------
+            # Typing is intentionally false here.
+            #
+            # Live typing comes through Socket.IO.
+            # ----------------------------------------------
+
+            "typing":
+                False,
+
+            "last_seen":
+                (
+                    other_user.last_seen.strftime("%H:%M")
+                    if other_user.last_seen
+                    else ""
+                ),
+
+            "last_message":
+                last_message,
+
+            "last_message_time":
+                last_message_time,
+
+            # Internal sorting value
+            "_latest_timestamp":
+                latest_timestamp,
+
+            "unread_count":
+                unread_count
         })
 
-    # Conversations with a latest message first.
+    # ------------------------------------------------------
+    # NEWEST CONVERSATION FIRST
+    # ------------------------------------------------------
+
     chats.sort(
-        key=lambda x: x["last_message_time"] or "",
+        key=lambda chat: (
+            chat["_latest_timestamp"]
+            if chat["_latest_timestamp"]
+            else datetime.min
+        ),
         reverse=True
     )
+
+    # Remove internal field
+    for chat in chats:
+        chat.pop("_latest_timestamp", None)
 
     return success_response(
         "Chats loaded",
         {
             "chats": chats
+        }
+    )
+@api_bp.get("/chat/messages/<int:other_user>")
+@jwt_required()
+def get_messages(other_user):
+
+    user_id = int(get_jwt_identity())
+
+    other = User.query.get(other_user)
+
+    if not other:
+        return error_response(
+            "User not found",
+            404
+        )
+
+    messages = ChatMessage.query.filter(
+        (
+            (ChatMessage.sender_id == user_id) &
+            (ChatMessage.receiver_id == other_user) &
+            (ChatMessage.deleted_for_sender == False)
+        )
+        |
+        (
+            (ChatMessage.sender_id == other_user) &
+            (ChatMessage.receiver_id == user_id) &
+            (ChatMessage.deleted_for_receiver == False)
+        )
+    ).order_by(
+        ChatMessage.created_at.asc()
+    ).all()
+
+    unread_messages = []
+
+    for message in messages:
+
+        if (
+            message.receiver_id == user_id
+            and not message.is_read
+        ):
+            message.is_read = True
+            unread_messages.append(message.id)
+
+    db.session.commit()
+
+    if unread_messages:
+
+        socketio.emit(
+            "messages_read",
+            {
+                "message_ids": unread_messages,
+                "reader": user_id
+            },
+            room=str(user_id)
+        )
+
+    return success_response(
+        "Messages retrieved successfully",
+        {
+            "messages": [
+
+                {
+                    "id":
+                        message.id,
+
+                    "chat_id":
+                        other_user,
+
+                    "sender":
+                        message.sender_id,
+
+                    "receiver":
+                        message.receiver_id,
+
+                    "message":
+                        message.message,
+
+                    "media_url":
+                        message.media_url,
+
+                    "media_type":
+                        message.media_type,
+
+                    "created_at":
+                        message.created_at.strftime(
+                            "%Y-%m-%d %H:%M"
+                        ),
+
+                    "is_read":
+                        message.is_read,
+
+                    "delivered":
+                        True,
+
+                    "edited":
+                        False,
+
+                    "deleted":
+                        False
+                }
+
+                for message in messages
+            ]
         }
     )
 @api_bp.post("/chat/send")
@@ -3325,96 +3485,6 @@ def delete_message():
     return success_response(
         "Message deleted successfully"
     )
-
-
-@api_bp.get("/chat/messages/<int:other_user>")
-@jwt_required()
-def get_messages(other_user):
-
-    user_id = int(get_jwt_identity())
-
-    other = User.query.get(other_user)
-
-    if not other:
-        return error_response(
-            "User not found",
-            404
-        )
-
-    messages = ChatMessage.query.filter(
-        (
-            (ChatMessage.sender_id == user_id) &
-            (ChatMessage.receiver_id == other_user)&
-            (~ChatMessage.deleted_for_sender)
-        ) |
-        (
-            (ChatMessage.sender_id == other_user) &
-            (ChatMessage.receiver_id == user_id) &
-            (ChatMessage.deleted_for_receiver == False)
-        )
-    ).order_by(
-        ChatMessage.created_at.asc()
-    ).all()
-
-    unread_messages = []
-
-    for message in messages:
-
-        if (
-            message.receiver_id == user_id and
-            not message.is_read
-        ):
-            message.is_read = True
-            unread_messages.append(message.id)
-
-    db.session.commit()
-
-    if unread_messages:
-
-        socketio.emit(
-            "messages_read",
-            {
-                "message_ids": unread_messages,
-                "reader": user_id
-            },
-            room=str(user_id)
-        )
-
-    return success_response(
-        "Messages retrieved successfully",
-        {
-            "messages": [
-                {
-                    "id": message.id,
-
-                    "chat_id": other_user,
-
-                    "sender": message.sender_id,
-
-                    "receiver": message.receiver_id,
-
-                    "message": message.message,
-
-                    "media_url": message.media_url,
-
-                    "media_type": message.media_type,
-
-                     "created_at": message.created_at.strftime(
-                         "%Y-%m-%d %H:%M"
-                    ),
-
-                    "is_read": message.is_read,
-
-                    "delivered": True,
-
-                    "edited": False,
-
-                    "deleted": False
-                }
-                for message in messages
-            ]
-        }
-    )
 @api_bp.delete("/chat/clear")
 @jwt_required()
 def clear_chat():
@@ -3557,7 +3627,6 @@ def unread_counts():
             "users": counts
         }
     )
-
 @socketio.on("connect")
 def handle_connect(auth):
 
@@ -3570,16 +3639,25 @@ def handle_connect(auth):
         return False
 
     try:
+
+        decoded = decode_token(token)
+
         user_id = int(
-            decode_token(token)["sub"]
+            decoded["sub"]
         )
+
     except Exception:
+
         return False
 
     user = User.query.get(user_id)
 
     if not user:
         return False
+
+    # ------------------------------------------------------
+    # TRACK SOCKET SESSION
+    # ------------------------------------------------------
 
     connected_users.setdefault(
         user_id,
@@ -3588,12 +3666,26 @@ def handle_connect(auth):
         request.sid
     )
 
+    # ------------------------------------------------------
+    # USER IS ONLINE
+    # ------------------------------------------------------
+
     user.is_online = True
     user.last_seen = datetime.utcnow()
 
     db.session.commit()
 
-    join_room(str(user_id))
+    # ------------------------------------------------------
+    # JOIN USER ROOM
+    # ------------------------------------------------------
+
+    join_room(
+        str(user_id)
+    )
+
+    # ------------------------------------------------------
+    # NOTIFY OTHER CONNECTED USERS
+    # ------------------------------------------------------
 
     socketio.emit(
         "user_status",
@@ -3620,7 +3712,12 @@ def handle_disconnect():
 
             disconnected_user = user_id
 
+            # --------------------------------------------------
+            # Only mark offline when ALL sessions are gone.
+            # --------------------------------------------------
+
             if not sessions:
+
                 del connected_users[user_id]
 
                 user = User.query.get(
@@ -3628,6 +3725,7 @@ def handle_disconnect():
                 )
 
                 if user:
+
                     user.is_online = False
                     user.last_seen = datetime.utcnow()
 
@@ -3645,7 +3743,7 @@ def handle_disconnect():
                         }
                     )
 
-            break    
+            break  
 @socketio.on("join")
 def handle_join(auth):
 
@@ -3664,20 +3762,14 @@ def handle_join(auth):
 
     except Exception:
         return
-
 @socketio.on("typing")
 def handle_typing(data):
-
-    receiver_id = data.get(
-        "receiver_id"
-    )
+    receiver_id = data.get("receiver_id")
 
     if not receiver_id:
         return
 
-    sender_id = connected_socket_user(
-        request.sid
-    )
+    sender_id = connected_socket_user(request.sid)
 
     if not sender_id:
         return
@@ -3689,20 +3781,16 @@ def handle_typing(data):
         },
         room=str(receiver_id)
     )
-        return
+
+
 @socketio.on("stop_typing")
 def handle_stop_typing(data):
-
-    receiver_id = data.get(
-        "receiver_id"
-    )
+    receiver_id = data.get("receiver_id")
 
     if not receiver_id:
         return
 
-    sender_id = connected_socket_user(
-        request.sid
-    )
+    sender_id = connected_socket_user(request.sid)
 
     if not sender_id:
         return
@@ -3713,7 +3801,7 @@ def handle_stop_typing(data):
             "user_id": sender_id
         },
         room=str(receiver_id)
-    )       
+    )
 # ==========================================================
 # GIFTS
 # ==========================================================
