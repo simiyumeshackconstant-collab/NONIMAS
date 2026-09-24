@@ -2985,53 +2985,25 @@ def request_withdrawal_api():
 @api_bp.get("/chat")
 @jwt_required()
 def get_chats():
-
     user_id = int(get_jwt_identity())
 
-    # ------------------------------------------------------
-    # USERS WHO ARE EITHER:
-    # 1. Added by me
-    # 2. Have added me
-    # ------------------------------------------------------
+    outgoing = Buddy.query.filter_by(user_id=user_id).all()
+    incoming = Buddy.query.filter_by(buddy_id=user_id).all()
 
-    outgoing = Buddy.query.filter_by(
-        user_id=user_id
-    ).all()
-
-    incoming = Buddy.query.filter_by(
-        buddy_id=user_id
-    ).all()
-
-    buddy_ids = {
-        buddy.buddy_id
-        for buddy in outgoing
-    }
-
-    buddy_ids.update(
-        buddy.user_id
-        for buddy in incoming
-    )
+    buddy_ids = {buddy.buddy_id for buddy in outgoing}
+    buddy_ids.update(buddy.user_id for buddy in incoming)
 
     if not buddy_ids:
-        return success_response(
-            "Chats loaded",
-            {
-                "chats": []
-            }
-        )
+        return success_response("Chats loaded", {"chats": []})
 
-    users = User.query.filter(
-        User.id.in_(buddy_ids)
-    ).all()
+    users = User.query.filter(User.id.in_(buddy_ids)).all()
 
     chats = []
 
     for other_user in users:
 
-        # --------------------------------------------------
-        # FIND NEWEST MESSAGE VISIBLE TO CURRENT USER
-        # --------------------------------------------------
-
+        # Get all messages between the two users,
+        # newest first.
         conversation_messages = (
             ChatMessage.query
             .filter(
@@ -3045,42 +3017,27 @@ def get_chats():
                     (ChatMessage.receiver_id == user_id)
                 )
             )
-            .order_by(
-                ChatMessage.created_at.desc()
-            )
+            .order_by(ChatMessage.created_at.desc())
             .all()
         )
 
+        # Find the newest message that is still visible to me.
         latest_message = None
 
         for candidate in conversation_messages:
 
             # Message sent by me
             if candidate.sender_id == user_id:
-
-                if getattr(
-                    candidate,
-                    "deleted_for_sender",
-                    False
-                ):
+                if candidate.deleted_for_sender:
                     continue
 
-            # Message sent by the other user
+            # Message received from the other user
             else:
-
-                if getattr(
-                    candidate,
-                    "deleted_for_receiver",
-                    False
-                ):
+                if candidate.deleted_for_receiver:
                     continue
 
             latest_message = candidate
             break
-
-        # --------------------------------------------------
-        # LAST MESSAGE
-        # --------------------------------------------------
 
         last_message = ""
         last_message_time = ""
@@ -3088,43 +3045,21 @@ def get_chats():
 
         if latest_message:
 
-            last_message = (
-                latest_message.message
-                or ""
-            )
+            last_message = latest_message.message or ""
 
             if latest_message.media_url:
-
                 if latest_message.media_type == "image":
                     last_message = "📷 Photo"
-
                 elif latest_message.media_type == "video":
                     last_message = "🎥 Video"
-
                 elif latest_message.media_type == "audio":
                     last_message = "🎤 Voice note"
-
-                elif latest_message.media_type in (
-                    "pdf",
-                    "doc",
-                    "document"
-                ):
+                elif latest_message.media_type in ("pdf", "doc", "document"):
                     last_message = "📎 Document"
 
             if latest_message.created_at:
-
-                latest_timestamp = (
-                    latest_message.created_at
-                )
-
-                last_message_time = (
-                    latest_message.created_at
-                    .strftime("%H:%M")
-                )
-
-        # --------------------------------------------------
-        # UNREAD
-        # --------------------------------------------------
+                latest_timestamp = latest_message.created_at
+                last_message_time = latest_message.created_at.strftime("%H:%M")
 
         unread_count = (
             ChatMessage.query
@@ -3138,59 +3073,25 @@ def get_chats():
         )
 
         chats.append({
-
             "id": other_user.id,
-
-            "name":
-                other_user.full_name,
-
-            "avatar":
-                (
-                    other_user.user_dp_pic
-                    or "default_avatar.png"
-                ),
-
-            # ----------------------------------------------
-            # CURRENT ONLINE STATUS
-            # ----------------------------------------------
-
-            "online":
-                bool(other_user.is_online),
-
-            # ----------------------------------------------
-            # Typing is intentionally false here.
-            #
-            # Live typing comes through Socket.IO.
-            # ----------------------------------------------
-
-            "typing":
-                False,
-
-            "last_seen":
-                (
-                    other_user.last_seen.strftime("%H:%M")
-                    if other_user.last_seen
-                    else ""
-                ),
-
-            "last_message":
-                last_message,
-
-            "last_message_time":
-                last_message_time,
-
-            # Internal sorting value
-            "_latest_timestamp":
-                latest_timestamp,
-
-            "unread_count":
-                unread_count
+            "name": other_user.full_name,
+            "avatar": other_user.user_dp_pic or "default_avatar.png",
+            "online": bool(other_user.is_online),
+            "typing": False,
+            "last_seen": (
+                other_user.last_seen.strftime("%H:%M")
+                if other_user.last_seen
+                else ""
+            ),
+            "last_message": last_message,
+            "last_message_time": last_message_time,
+            "_latest_timestamp": latest_timestamp,
+            "unread_count": unread_count
         })
 
-    # ------------------------------------------------------
+    # =========================================================
     # NEWEST CONVERSATION FIRST
-    # ------------------------------------------------------
-
+    # =========================================================
     chats.sort(
         key=lambda chat: (
             chat["_latest_timestamp"]
@@ -3200,7 +3101,7 @@ def get_chats():
         reverse=True
     )
 
-    # Remove internal field
+    # Remove internal sorting field
     for chat in chats:
         chat.pop("_latest_timestamp", None)
 
