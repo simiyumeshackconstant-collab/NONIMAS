@@ -3593,6 +3593,12 @@ def clear_chat_everyone():
         room=str(other_user)
     )
 
+    socketio.emit(
+        "chat_cleared_everyone",
+        payload,
+        room=str(user_id)
+    )
+
     return success_response(
         "Chat deleted for everyone"
     )
