@@ -3449,7 +3449,7 @@ def user_status(user_id):
             )
         }
     )
-@api_bp.delete("/chat/message")
+@api_bp.post("/chat/message")
 @jwt_required()
 def delete_message():
 
@@ -3485,7 +3485,7 @@ def delete_message():
     return success_response(
         "Message deleted successfully"
     )
-@api_bp.delete("/chat/clear")
+@api_bp.post("/chat/clear")
 @jwt_required()
 def clear_chat():
 
@@ -3541,7 +3541,7 @@ def clear_chat():
     return success_response(
         "Chat deleted for you"
     )
-@api_bp.delete("/chat/clear-everyone")
+@api_bp.post("/chat/clear-everyone")
 @jwt_required()
 def clear_chat_everyone():
 
