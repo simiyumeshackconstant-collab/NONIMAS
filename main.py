@@ -3293,13 +3293,21 @@ def send_message():
         db.session.add(message)
         db.session.commit()
 
+        payload = {
+            "sender": user_id,
+            "receiver": receiver_id
+        }
+
         socketio.emit(
             "new_message",
-            {
-                "sender": user_id,
-                "receiver": receiver_id
-            },
+            payload,
             room=str(receiver_id)
+        )
+
+        socketio.emit(
+            "new_message",
+            payload,
+            room=str(user_id)
         )
 
         return success_response(
