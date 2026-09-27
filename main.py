@@ -3085,6 +3085,11 @@ def get_chats():
             ),
             "last_message": last_message,
             "last_message_time": last_message_time,
+            "latest_message_at": (
+                latest_message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                if latest_message and latest_message.created_at
+                else ""
+            ),
             "_latest_timestamp": latest_timestamp,
             "unread_count": unread_count
         })
