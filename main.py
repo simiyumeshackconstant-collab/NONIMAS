@@ -3680,6 +3680,12 @@ def handle_connect(auth):
             "last_seen": None
         }
     )
+def connected_socket_user(sid):
+    for user_id, sessions in connected_users.items():
+        if sid in sessions:
+            return user_id
+
+    return None
 @socketio.on("disconnect")
 def handle_disconnect():
 
