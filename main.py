@@ -36,6 +36,7 @@ from models import (
     DepositTransaction,
     WithdrawalRequest,
     ChatMessage,
+    ChatClear,
     Gift,
     GiftTransaction,
     Notification,
@@ -2986,6 +2987,14 @@ def request_withdrawal_api():
 @jwt_required()
 def get_chats():
     user_id = int(get_jwt_identity())
+    cleared_chats = ChatClear.query.filter_by(
+        user_id=user_id
+    ).all()
+
+    cleared_user_ids = {
+        clear.other_user_id
+        for clear in cleared_chats
+    }
 
     outgoing = Buddy.query.filter_by(user_id=user_id).all()
     incoming = Buddy.query.filter_by(buddy_id=user_id).all()
@@ -3001,6 +3010,8 @@ def get_chats():
     chats = []
 
     for other_user in users:
+        if other_user.id in cleared_user_ids:
+            continue
 
         # Get all messages between the two users,
         # newest first.
@@ -3244,6 +3255,24 @@ def send_message():
                 "Receiver not found",
                 404
             )
+        # ------------------------------------------------------
+        # A new message starts a new visible conversation.
+        # Remove previous "cleared for everyone" markers.
+        # ------------------------------------------------------
+
+        ChatClear.query.filter(
+            (
+                (ChatClear.user_id == user_id) &
+                (ChatClear.other_user_id == receiver_id)
+            )
+            |
+            (
+                (ChatClear.user_id == receiver_id) &
+                (ChatClear.other_user_id == user_id)
+            )
+        ).delete(
+            synchronize_session=False
+        )
 
         text = request.form.get(
             "message",
@@ -3458,25 +3487,23 @@ def clear_chat():
 @api_bp.post("/chat/clear-everyone")
 @jwt_required()
 def clear_chat_everyone():
+    user_id = int(get_jwt_identity())
 
-    user_id = int(
-        get_jwt_identity()
-    )
+    data = request.get_json(silent=True) or {}
 
-    data = request.get_json(
-        silent=True
-    ) or {}
-
-    other_user = data.get(
-        "other_user"
-    )
+    other_user = data.get("other_user")
 
     if not other_user:
-        return error_response(
-            "Other user is required"
-        )
+        return error_response("Other user is required")
 
-    other_user = int(other_user)
+    try:
+        other_user = int(other_user)
+    except (TypeError, ValueError):
+        return error_response("Invalid other user")
+
+    # ------------------------------------------------------
+    # Mark every existing message as deleted for BOTH users
+    # ------------------------------------------------------
 
     messages = ChatMessage.query.filter(
         (
@@ -3494,7 +3521,45 @@ def clear_chat_everyone():
         message.deleted_for_sender = True
         message.deleted_for_receiver = True
 
+    # ------------------------------------------------------
+    # Remove any previous clear markers for this pair
+    # ------------------------------------------------------
+
+    ChatClear.query.filter(
+        (
+            (ChatClear.user_id == user_id) &
+            (ChatClear.other_user_id == other_user)
+        )
+        |
+        (
+            (ChatClear.user_id == other_user) &
+            (ChatClear.other_user_id == user_id)
+        )
+    ).delete(synchronize_session=False)
+
+    # ------------------------------------------------------
+    # Create BOTH clear markers
+    # ------------------------------------------------------
+
+    db.session.add(
+        ChatClear(
+            user_id=user_id,
+            other_user_id=other_user
+        )
+    )
+
+    db.session.add(
+        ChatClear(
+            user_id=other_user,
+            other_user_id=user_id
+        )
+    )
+
     db.session.commit()
+
+    # ------------------------------------------------------
+    # Tell BOTH clients immediately
+    # ------------------------------------------------------
 
     payload = {
         "user_id": user_id,

@@ -110,6 +110,28 @@ class ChatMessage(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     deleted_for_sender = db.Column(db.Boolean,nullable=False,default=False)
     deleted_for_receiver = db.Column(db.Boolean,nullable=False,default=False)
+class ChatClear(db.Model):
+    __tablename__ = "chat_clears"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(
+        db.Integer,
+        nullable=False,
+        index=True
+    )
+
+    other_user_id = db.Column(
+        db.Integer,
+        nullable=False,
+        index=True
+    )
+
+    cleared_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
 class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, nullable=False)
@@ -198,6 +220,8 @@ __all__ = [
     "GiftTransaction",
     "UserGiftBalance",
     "ChatMessage",
+    "ChatClear",
+    "EditMessage",
     "DepositTransaction",
     "WithdrawalRequest",
     "LIKE_EARN",
