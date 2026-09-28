@@ -3328,8 +3328,13 @@ def send_message():
         db.session.commit()
 
         payload = {
+            "id": message.id,
             "sender": user_id,
-            "receiver": receiver_id
+            "receiver": receiver_id,
+            "message": message.message,
+            "media_url": message.media_url,
+            "media_type": message.media_type,
+            "created_at": message.created_at.strftime("%Y-%m-%d %H:%M")
         }
 
         socketio.emit(
@@ -3772,8 +3777,6 @@ def handle_typing(data):
         },
         room=str(receiver_id)
     )
-
-
 @socketio.on("stop_typing")
 def handle_stop_typing(data):
     receiver_id = data.get("receiver_id")
