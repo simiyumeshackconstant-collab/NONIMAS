@@ -24,6 +24,13 @@ class User(db.Model):
     is_verified = db.Column(db.Boolean, default=False)
     user_dp_pic = db.Column(db.String(255), nullable=True)
     bio = db.Column(db.String(255), default="")
+class UserDeviceToken(db.Model):
+    __tablename__ = "user_device_tokens"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer,nullable=False,index=True)
+    token = db.Column(db.String(500),nullable=False,unique=True)
+    created_at = db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
+    updated_at = db.Column(db.DateTime,default=datetime.utcnow,onupdate=datetime.utcnow,nullable=False)
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer)
@@ -225,5 +232,6 @@ __all__ = [
     "DepositTransaction",
     "WithdrawalRequest",
     "LIKE_EARN",
+    "UserDeviceToken",
     "COMMENT_EARN",
 ]

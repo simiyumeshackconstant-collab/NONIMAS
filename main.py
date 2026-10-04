@@ -2978,8 +2978,6 @@ def request_withdrawal_api():
         201
     )
 
-
-
 # ==========================================================
 # CHAT
 # ==========================================================
@@ -4226,6 +4224,46 @@ def about():
 # ==========================================================
 # NOTIFICATIONS
 # ==========================================================
+@api_bp.post("/notifications/fcm-token")
+@jwt_required()
+def register_fcm_token():
+
+    user_id = int(get_jwt_identity())
+
+    data = request.get_json(silent=True) or {}
+
+    token = data.get("token")
+
+    if not token:
+        return error_response(
+            "FCM token is required"
+        )
+
+    token = token.strip()
+
+    existing = UserDeviceToken.query.filter_by(
+        token=token
+    ).first()
+
+    if existing:
+
+        existing.user_id = user_id
+        existing.updated_at = datetime.utcnow()
+
+    else:
+
+        db.session.add(
+            UserDeviceToken(
+                user_id=user_id,
+                token=token
+            )
+        )
+
+    db.session.commit()
+
+    return success_response(
+        "FCM token registered"
+    )
 @api_bp.get("/notifications/count")
 @jwt_required()
 def notification_count():
