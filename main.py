@@ -3794,6 +3794,115 @@ def handle_stop_typing(data):
         },
         room=str(receiver_id)
     )
+@socketio.on("call_invite")
+def handle_call_invite(data):
+
+    caller_id = connected_socket_user(request.sid)
+
+    if not caller_id:
+        return
+
+    receiver_id = data.get("receiver_id")
+    call_type = data.get("call_type", "voice")
+
+    if not receiver_id:
+        return
+
+    try:
+        receiver_id = int(receiver_id)
+    except (TypeError, ValueError):
+        return
+
+    caller = User.query.get(caller_id)
+    receiver = User.query.get(receiver_id)
+
+    if not caller or not receiver:
+        return
+
+    payload = {
+        "caller_id": caller_id,
+        "caller_name": caller.full_name,
+        "receiver_id": receiver_id,
+        "call_type": call_type,
+    }
+
+    # Send to receiver if connected
+    socketio.emit(
+        "call_invite",
+        payload,
+        room=str(receiver_id)
+    )
+
+    print(
+        f"CALL INVITE: {caller_id} -> "
+        f"{receiver_id} ({call_type})"
+    )
+
+
+@socketio.on("call_accept")
+def handle_call_accept(data):
+
+    caller_id = connected_socket_user(request.sid)
+
+    if not caller_id:
+        return
+
+    receiver_id = data.get("receiver_id")
+
+    if not receiver_id:
+        return
+
+    socketio.emit(
+        "call_accept",
+        {
+            "receiver_id": caller_id,
+        },
+        room=str(receiver_id)
+    )
+
+
+@socketio.on("call_reject")
+def handle_call_reject(data):
+
+    receiver_id = connected_socket_user(request.sid)
+
+    if not receiver_id:
+        return
+
+    caller_id = data.get("caller_id")
+
+    if not caller_id:
+        return
+
+    socketio.emit(
+        "call_reject",
+        {
+            "receiver_id": receiver_id,
+        },
+        room=str(caller_id)
+    )
+
+
+@socketio.on("call_end")
+def handle_call_end(data):
+
+    user_id = connected_socket_user(request.sid)
+
+    if not user_id:
+        return
+
+    other_user_id = data.get("other_user_id")
+
+    if not other_user_id:
+        return
+
+    socketio.emit(
+        "call_end",
+        {
+            "user_id": user_id,
+        },
+        room=str(other_user_id)
+    )
 # ==========================================================
 # GIFTS
 # ==========================================================
