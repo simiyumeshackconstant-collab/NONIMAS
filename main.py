@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import uuid
 import os
-
+import firebase_admin
+from firebase_admin import credentials, messaging
 from flask import Blueprint, request, jsonify, current_app,url_for, redirect
 from flask_jwt_extended import (
     create_access_token,
@@ -51,6 +52,7 @@ from helpers import (
     verify_password,
     allowed_file,
     add_to_wallet,
+    send_incoming_call_notification,
     create_buddy_milestone
 )
 
@@ -3826,19 +3828,32 @@ def handle_call_invite(data):
         "call_type": call_type,
     }
 
-    # Send to receiver if connected
+    # ---------------------------------------------------------
+    # 1. Send through Socket.IO if receiver is connected
+    # ---------------------------------------------------------
+
     socketio.emit(
         "call_invite",
         payload,
         room=str(receiver_id)
     )
 
-    print(
-        f"CALL INVITE: {caller_id} -> "
-        f"{receiver_id} ({call_type})"
+    # ---------------------------------------------------------
+    # 2. Send FCM notification
+    #    This allows incoming calls while app is backgrounded
+    # ---------------------------------------------------------
+
+    send_incoming_call_notification(
+        receiver_id=receiver_id,
+        caller_id=caller_id,
+        caller_name=caller.full_name,
+        call_type=call_type
     )
 
-
+    print(
+        f"📞 CALL INVITE: "
+        f"{caller_id} -> {receiver_id} ({call_type})"
+    )
 @socketio.on("call_accept")
 def handle_call_accept(data):
 

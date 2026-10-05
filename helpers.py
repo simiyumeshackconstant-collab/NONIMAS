@@ -3,7 +3,8 @@ import string
 import os
 from decimal import Decimal
 from functools import wraps
-
+import firebase_admin
+from firebase_admin import credentials, messaging
 import requests
 from flask import jsonify, redirect, session, url_for, flash
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -170,7 +171,49 @@ def create_notification(
 
     return notification
 
+def send_incoming_call_notification(
+    receiver_id,
+    caller_id,
+    caller_name,
+    call_type
+):
+    tokens = UserDeviceToken.query.filter_by(
+        user_id=receiver_id
+    ).all()
 
+    if not tokens:
+        print(
+            f"📞 FCM: no device tokens for user {receiver_id}"
+        )
+        return
+
+    for device in tokens:
+
+        try:
+
+            message = messaging.Message(
+                data={
+                    "type": "incoming_call",
+                    "caller_id": str(caller_id),
+                    "caller_name": caller_name or "Nonimas user",
+                    "call_type": call_type or "voice"
+                },
+                token=device.token
+            )
+
+            response = messaging.send(message)
+
+            print(
+                f"📞 FCM CALL SENT → user={receiver_id} "
+                f"token={device.token[:12]}... "
+                f"response={response}"
+            )
+
+        except Exception as e:
+
+            print(
+                f"📞 FCM CALL FAILED → user={receiver_id}: {e}"
+            )
 # ==========================================================
 # BUDDY MILESTONES
 # ==========================================================

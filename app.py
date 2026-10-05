@@ -1,4 +1,8 @@
 import os
+import json
+
+import firebase_admin
+from firebase_admin import credentials
 
 import cloudinary
 
@@ -28,9 +32,30 @@ app.config.from_object(config["production"])
 
 
 # ==========================================================
-# INITIALIZE EXTENSIONS
+# FIREBASE ADMIN
 # ==========================================================
 
+firebase_json = os.environ.get(
+    "FIREBASE_SERVICE_ACCOUNT_JSON"
+)
+
+if not firebase_json:
+    raise RuntimeError(
+        "FIREBASE_SERVICE_ACCOUNT_JSON is not configured"
+    )
+
+if not firebase_admin._apps:
+
+    cred = credentials.Certificate(
+        json.loads(firebase_json)
+    )
+
+    firebase_admin.initialize_app(cred)
+
+
+# ==========================================================
+# INITIALIZE EXTENSIONS
+# ==========================================================
 
 db.init_app(app)
 
@@ -88,7 +113,12 @@ if __name__ == "__main__":
     with app.app_context():
         seed_gifts()
 
-    port = int(os.environ.get("PORT", 10000))
+    port = int(
+        os.environ.get(
+            "PORT",
+            10000
+        )
+    )
 
     socketio.run(
         app,
