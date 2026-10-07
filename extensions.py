@@ -33,6 +33,6 @@ cors = CORS()
 
 socketio = SocketIO(
     cors_allowed_origins="*",
-    async_mode="threading",
+    async_mode="eventlet",
     manage_session=False
 )
