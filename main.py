@@ -3620,34 +3620,60 @@ def unread_counts():
 @socketio.on("connect")
 def handle_connect(auth):
 
+    print("📡 SOCKET CONNECT ATTEMPT")
+    print("📡 SOCKET AUTH:", auth)
+
     token = None
 
     if isinstance(auth, dict):
         token = auth.get("token")
 
     if not token:
+        print("❌ SOCKET REJECTED: NO TOKEN")
         return False
 
     try:
 
+        print("📡 SOCKET TOKEN RECEIVED")
+
         decoded = decode_token(token)
 
-        user_id = int(
-            decoded["sub"]
-        )
+        print("📡 SOCKET JWT DECODED:", decoded)
 
-    except Exception:
+        user_id = int(decoded["sub"])
+
+        print("📡 SOCKET USER ID:", user_id)
+
+    except Exception as e:
+
+        print(
+            "❌ SOCKET JWT ERROR:",
+            type(e).__name__,
+            str(e)
+        )
 
         return False
 
     user = User.query.get(user_id)
 
     if not user:
+
+        print(
+            "❌ SOCKET REJECTED: USER NOT FOUND:",
+            user_id
+        )
+
         return False
 
-    # ------------------------------------------------------
+    print(
+        "✅ SOCKET AUTHENTICATED:",
+        user_id,
+        user.full_name
+    )
+
+    # =========================================================
     # TRACK SOCKET SESSION
-    # ------------------------------------------------------
+    # =========================================================
 
     connected_users.setdefault(
         user_id,
@@ -3656,26 +3682,26 @@ def handle_connect(auth):
         request.sid
     )
 
-    # ------------------------------------------------------
+    # =========================================================
     # USER IS ONLINE
-    # ------------------------------------------------------
+    # =========================================================
 
     user.is_online = True
     user.last_seen = datetime.utcnow()
 
     db.session.commit()
 
-    # ------------------------------------------------------
+    # =========================================================
     # JOIN USER ROOM
-    # ------------------------------------------------------
+    # =========================================================
 
     join_room(
         str(user_id)
     )
 
-    # ------------------------------------------------------
+    # =========================================================
     # NOTIFY OTHER CONNECTED USERS
-    # ------------------------------------------------------
+    # =========================================================
 
     socketio.emit(
         "user_status",
@@ -3685,6 +3711,13 @@ def handle_connect(auth):
             "last_seen": None
         }
     )
+
+    print(
+        "✅ SOCKET CONNECTION ACCEPTED:",
+        user_id
+    )
+
+    return True
 def connected_socket_user(sid):
     for user_id, sessions in connected_users.items():
         if sid in sessions:
