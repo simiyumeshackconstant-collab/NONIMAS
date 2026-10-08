@@ -3620,49 +3620,55 @@ def unread_counts():
 @socketio.on("connect")
 def handle_connect(auth):
 
+    print("========================================")
     print("📡 SOCKET CONNECT ATTEMPT")
-    print("📡 SOCKET AUTH:", auth)
+    print("📡 AUTH OBJECT:", repr(auth))
+    print("📡 AUTH TYPE:", type(auth).__name__)
+    print("📡 SOCKET SID:", request.sid)
+    print("========================================")
 
     token = None
 
     if isinstance(auth, dict):
         token = auth.get("token")
 
+    print("📡 TOKEN EXISTS:", bool(token))
+
     if not token:
-        print("❌ SOCKET REJECTED: NO TOKEN")
+        print("❌ SOCKET REJECTED: NO TOKEN IN AUTH")
         return False
 
     try:
-
-        print("📡 SOCKET TOKEN RECEIVED")
+        print("📡 DECODING SOCKET JWT...")
 
         decoded = decode_token(token)
 
-        print("📡 SOCKET JWT DECODED:", decoded)
+        print("✅ SOCKET JWT DECODED:", decoded)
 
-        user_id = int(decoded["sub"])
+        sub = decoded.get("sub")
+
+        print("📡 JWT SUB:", repr(sub))
+        print("📡 JWT SUB TYPE:", type(sub).__name__)
+
+        if sub is None:
+            print("❌ SOCKET REJECTED: JWT HAS NO SUB")
+            return False
+
+        user_id = int(sub)
 
         print("📡 SOCKET USER ID:", user_id)
 
     except Exception as e:
 
-        print(
-            "❌ SOCKET JWT ERROR:",
-            type(e).__name__,
-            str(e)
-        )
+        print("❌ SOCKET JWT ERROR TYPE:", type(e).__name__)
+        print("❌ SOCKET JWT ERROR:", repr(e))
 
         return False
 
     user = User.query.get(user_id)
 
     if not user:
-
-        print(
-            "❌ SOCKET REJECTED: USER NOT FOUND:",
-            user_id
-        )
-
+        print("❌ SOCKET REJECTED: USER NOT FOUND:", user_id)
         return False
 
     print(
@@ -3671,50 +3677,23 @@ def handle_connect(auth):
         user.full_name
     )
 
-    # =========================================================
-    # TRACK SOCKET SESSION
-    # =========================================================
-
     connected_users.setdefault(
         user_id,
         set()
-    ).add(
-        request.sid
-    )
-
-    # =========================================================
-    # USER IS ONLINE
-    # =========================================================
+    ).add(request.sid)
 
     user.is_online = True
     user.last_seen = datetime.utcnow()
 
     db.session.commit()
 
-    # =========================================================
-    # JOIN USER ROOM
-    # =========================================================
-
-    join_room(
-        str(user_id)
-    )
-
-    # =========================================================
-    # NOTIFY OTHER CONNECTED USERS
-    # =========================================================
-
-    socketio.emit(
-        "user_status",
-        {
-            "user_id": user_id,
-            "online": True,
-            "last_seen": None
-        }
-    )
+    join_room(str(user_id))
 
     print(
         "✅ SOCKET CONNECTION ACCEPTED:",
-        user_id
+        user_id,
+        "SID:",
+        request.sid
     )
 
     return True
@@ -3950,6 +3929,46 @@ def handle_call_end(data):
             "user_id": user_id,
         },
         room=str(other_user_id)
+    )
+@api_bp.post("/notifications/fcm-token")
+@jwt_required()
+def register_fcm_token():
+
+    user_id = int(get_jwt_identity())
+
+    data = request.get_json(silent=True) or {}
+
+    token = data.get("token")
+
+    if not token:
+        return error_response(
+            "FCM token is required"
+        )
+
+    token = token.strip()
+
+    existing = UserDeviceToken.query.filter_by(
+        token=token
+    ).first()
+
+    if existing:
+
+        existing.user_id = user_id
+        existing.updated_at = datetime.utcnow()
+
+    else:
+
+        db.session.add(
+            UserDeviceToken(
+                user_id=user_id,
+                token=token
+            )
+        )
+
+    db.session.commit()
+
+    return success_response(
+        "FCM token registered"
     )
 # ==========================================================
 # GIFTS
@@ -4381,46 +4400,7 @@ def about():
 # ==========================================================
 # NOTIFICATIONS
 # ==========================================================
-@api_bp.post("/notifications/fcm-token")
-@jwt_required()
-def register_fcm_token():
 
-    user_id = int(get_jwt_identity())
-
-    data = request.get_json(silent=True) or {}
-
-    token = data.get("token")
-
-    if not token:
-        return error_response(
-            "FCM token is required"
-        )
-
-    token = token.strip()
-
-    existing = UserDeviceToken.query.filter_by(
-        token=token
-    ).first()
-
-    if existing:
-
-        existing.user_id = user_id
-        existing.updated_at = datetime.utcnow()
-
-    else:
-
-        db.session.add(
-            UserDeviceToken(
-                user_id=user_id,
-                token=token
-            )
-        )
-
-    db.session.commit()
-
-    return success_response(
-        "FCM token registered"
-    )
 @api_bp.get("/notifications/count")
 @jwt_required()
 def notification_count():
