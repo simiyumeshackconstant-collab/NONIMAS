@@ -17,7 +17,7 @@ import cloudinary.uploader
 
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
-
+from mqtt_service import mqtt_service
 from extensions import (
     db,
     jwt
