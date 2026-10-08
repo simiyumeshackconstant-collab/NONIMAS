@@ -14,8 +14,7 @@ from extensions import (
     db,
     migrate,
     jwt,
-    cors,
-    socketio
+    cors
 )
 
 from helpers import seed_gifts
@@ -73,12 +72,6 @@ cors.init_app(
     }
 )
 
-socketio.init_app(
-    app,
-    cors_allowed_origins="*",
-    async_mode="eventlet",
-    manage_session=False
-)
 mqtt_service.flask_app = app
 mqtt_service.connect()
 # ==========================================================
@@ -121,8 +114,7 @@ if __name__ == "__main__":
         )
     )
 
-    socketio.run(
-        app,
+    app.run(
         host="0.0.0.0",
         port=port,
         debug=False

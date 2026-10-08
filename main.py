@@ -5361,9 +5361,8 @@ def reject_withdrawal(id):
 # ==========================================================
 
 if __name__ == "__main__":
-    socketio.run(
-        app,
+    app.run(
         host="0.0.0.0",
-        port=5001,
-        debug=True
+        port=port,
+        debug=False
     )
