@@ -120,13 +120,13 @@ class MQTTService:
             # Backend listens for realtime events
             # published by Android clients.
             client.subscribe(
-                "nonimas/users/+/events",
+                "nonimas/in/+",
                 qos=1
             )
 
             print(
                 "📡 MQTT SUBSCRIBED:",
-                "nonimas/users/+/events"
+                "nonimas/in/+"
             )
 
         else:
@@ -353,12 +353,12 @@ class MQTTService:
 
     @staticmethod
     def user_topic(user_id):
-
         return f"nonimas/users/{user_id}/events"
 
-    # =========================================================
-    # TYPING
-    # =========================================================
+
+    @staticmethod
+    def inbound_topic(user_id):
+        return f"nonimas/in/{user_id}"
 
     def handle_typing(
         self,
