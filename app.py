@@ -72,16 +72,15 @@ cors.init_app(
         }
     }
 )
-mqtt_service.flask_app = app
-mqtt_service.connect()
+
 socketio.init_app(
     app,
     cors_allowed_origins="*",
     async_mode="eventlet",
     manage_session=False
 )
-
-
+mqtt_service.flask_app = app
+mqtt_service.connect()
 # ==========================================================
 # CLOUDINARY
 # ==========================================================
