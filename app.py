@@ -7,6 +7,7 @@ from firebase_admin import credentials
 import cloudinary
 
 from flask import Flask
+from mqtt_service import mqtt_service
 
 from config import config
 from extensions import (
@@ -71,7 +72,8 @@ cors.init_app(
         }
     }
 )
-
+mqtt_service.flask_app = app
+mqtt_service.connect()
 socketio.init_app(
     app,
     cors_allowed_origins="*",
@@ -124,5 +126,5 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port,
-        debug=True
+        debug=False
     )
