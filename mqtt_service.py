@@ -238,6 +238,13 @@ class MQTTService:
                 topic,
                 payload
             )
+        
+        elif event_type == "new_message":
+
+            self.handle_new_message(
+                topic,
+                payload
+            )
 
         elif event_type == "call_invite":
 
@@ -266,6 +273,12 @@ class MQTTService:
                 topic,
                 payload
             )
+        elif event_type == "messages_read":
+
+            self.handle_messages_read(
+                topic,
+                payload
+            )
 
         else:
 
@@ -273,11 +286,16 @@ class MQTTService:
                 "⚠️ UNKNOWN MQTT EVENT:",
                 event_type
             )
+    def handle_messages_read(
+        self,
+        topic,
+        payload
+    ):
 
-    # =========================================================
-    # PUBLISH
-    # =========================================================
-
+        print(
+            "👁️ MQTT MESSAGES READ:",
+            payload
+        )
     def publish(
         self,
         topic,
@@ -385,11 +403,16 @@ class MQTTService:
                 "user_id": sender_id
             }
         )
+    def handle_new_message(
+        self,
+        topic,
+        payload
+    ):
 
-    # =========================================================
-    # CALL INVITE
-    # =========================================================
-
+        print(
+            "💬 MQTT NEW MESSAGE:",
+            payload
+        )
     def handle_call_invite(
         self,
         topic,

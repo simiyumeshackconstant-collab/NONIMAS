@@ -20,7 +20,6 @@ from werkzeug.security import generate_password_hash
 
 from extensions import (
     db,
-    socketio,
     jwt
 )
 
@@ -56,10 +55,6 @@ from helpers import (
     create_buddy_milestone
 )
 
-from flask_socketio import (
-    join_room,
-    disconnect
-)
 
 # ==========================================================
 # ANDROID API BLUEPRINT
@@ -3172,13 +3167,13 @@ def get_messages(other_user):
 
     if unread_messages:
 
-        socketio.emit(
-            "messages_read",
-            {
+        mqtt_service.publish(
+            mqtt_service.user_topic(user_id),
+            { 
+                "type": "messages_read",
                 "message_ids": unread_messages,
                 "reader": user_id
-            },
-            room=str(user_id)
+            }
         )
 
     return success_response(
@@ -3337,16 +3332,20 @@ def send_message():
             "created_at": message.created_at.strftime("%Y-%m-%d %H:%M")
         }
 
-        socketio.emit(
-            "new_message",
-            payload,
-            room=str(receiver_id)
+        mqtt_service.publish(
+            mqtt_service.user_topic(receiver_id),
+            {
+                "type": "new_message",
+                **payload
+            }
         )
-
-        socketio.emit(
-            "new_message",
-            payload,
-            room=str(user_id)
+        mqtt_service.publish(
+            
+            mqtt_service.user_topic(user_id),
+            {
+                "type": "new_message",
+                **payload
+            }
         )
 
         return success_response(
@@ -3478,13 +3477,14 @@ def clear_chat():
 
     db.session.commit()
 
-    socketio.emit(
-        "chat_cleared_for_me",
+    mqtt_service.publish(
+        mqtt_service.user_topic(user_id),
         {
+            "type": "chat_cleared_for_me",
             "user_id": user_id
-        },
-        room=str(user_id)
+        }
     )
+
 
     return success_response(
         "Chat deleted for you"
@@ -3571,16 +3571,20 @@ def clear_chat_everyone():
         "other_user": other_user
     }
 
-    socketio.emit(
-        "chat_cleared_everyone",
-        payload,
-        room=str(other_user)
+    mqtt_service.publish(
+        mqtt_service.user_topic(other_user),
+        {
+            "type": "chat_cleared_everyone",
+            **payload
+        }
     )
 
-    socketio.emit(
-        "chat_cleared_everyone",
-        payload,
-        room=str(user_id)
+    mqtt_service.publish(
+        mqtt_service.user_topic(user_id),
+        {
+            "type": "chat_cleared_everyone",
+            **payload
+        }
     )
 
     return success_response(
@@ -3616,319 +3620,6 @@ def unread_counts():
             "total": total,
             "users": counts
         }
-    )
-@socketio.on("connect")
-def handle_connect(auth):
-
-    print("========================================")
-    print("📡 SOCKET CONNECT ATTEMPT")
-    print("📡 AUTH OBJECT:", repr(auth))
-    print("📡 AUTH TYPE:", type(auth).__name__)
-    print("📡 SOCKET SID:", request.sid)
-    print("========================================")
-
-    token = None
-
-    if isinstance(auth, dict):
-        token = auth.get("token")
-
-    print("📡 TOKEN EXISTS:", bool(token))
-
-    if not token:
-        print("❌ SOCKET REJECTED: NO TOKEN IN AUTH")
-        return False
-
-    try:
-        print("📡 DECODING SOCKET JWT...")
-
-        decoded = decode_token(token)
-
-        print("✅ SOCKET JWT DECODED:", decoded)
-
-        sub = decoded.get("sub")
-
-        print("📡 JWT SUB:", repr(sub))
-        print("📡 JWT SUB TYPE:", type(sub).__name__)
-
-        if sub is None:
-            print("❌ SOCKET REJECTED: JWT HAS NO SUB")
-            return False
-
-        user_id = int(sub)
-
-        print("📡 SOCKET USER ID:", user_id)
-
-    except Exception as e:
-
-        print("❌ SOCKET JWT ERROR TYPE:", type(e).__name__)
-        print("❌ SOCKET JWT ERROR:", repr(e))
-
-        return False
-
-    user = User.query.get(user_id)
-
-    if not user:
-        print("❌ SOCKET REJECTED: USER NOT FOUND:", user_id)
-        return False
-
-    print(
-        "✅ SOCKET AUTHENTICATED:",
-        user_id,
-        user.full_name
-    )
-
-    connected_users.setdefault(
-        user_id,
-        set()
-    ).add(request.sid)
-
-    user.is_online = True
-    user.last_seen = datetime.utcnow()
-
-    db.session.commit()
-
-    join_room(str(user_id))
-
-    print(
-        "✅ SOCKET CONNECTION ACCEPTED:",
-        user_id,
-        "SID:",
-        request.sid
-    )
-
-    return True
-def connected_socket_user(sid):
-    for user_id, sessions in connected_users.items():
-        if sid in sessions:
-            return user_id
-
-    return None
-@socketio.on("disconnect")
-def handle_disconnect():
-
-    disconnected_user = None
-
-    for user_id, sessions in list(
-        connected_users.items()
-    ):
-
-        if request.sid in sessions:
-
-            sessions.remove(
-                request.sid
-            )
-
-            disconnected_user = user_id
-
-            # --------------------------------------------------
-            # Only mark offline when ALL sessions are gone.
-            # --------------------------------------------------
-
-            if not sessions:
-
-                del connected_users[user_id]
-
-                user = User.query.get(
-                    user_id
-                )
-
-                if user:
-
-                    user.is_online = False
-                    user.last_seen = datetime.utcnow()
-
-                    db.session.commit()
-
-                    socketio.emit(
-                        "user_status",
-                        {
-                            "user_id": user_id,
-                            "online": False,
-                            "last_seen":
-                                user.last_seen.strftime(
-                                    "%H:%M"
-                                )
-                        }
-                    )
-
-            break  
-@socketio.on("join")
-def handle_join(auth):
-
-    try:
-
-        if not auth or "token" not in auth:
-            return
-
-        token = auth["token"]
-
-        decoded = decode_token(token)
-
-        user_id = int(decoded["sub"])
-
-        join_room(str(user_id))
-
-    except Exception:
-        return
-@socketio.on("typing")
-def handle_typing(data):
-    receiver_id = data.get("receiver_id")
-
-    if not receiver_id:
-        return
-
-    sender_id = connected_socket_user(request.sid)
-
-    if not sender_id:
-        return
-
-    socketio.emit(
-        "typing",
-        {
-            "user_id": sender_id
-        },
-        room=str(receiver_id)
-    )
-@socketio.on("stop_typing")
-def handle_stop_typing(data):
-    receiver_id = data.get("receiver_id")
-
-    if not receiver_id:
-        return
-
-    sender_id = connected_socket_user(request.sid)
-
-    if not sender_id:
-        return
-
-    socketio.emit(
-        "stop_typing",
-        {
-            "user_id": sender_id
-        },
-        room=str(receiver_id)
-    )
-@socketio.on("call_invite")
-def handle_call_invite(data):
-
-    caller_id = connected_socket_user(request.sid)
-
-    if not caller_id:
-        return
-
-    receiver_id = data.get("receiver_id")
-    call_type = data.get("call_type", "voice")
-
-    if not receiver_id:
-        return
-
-    try:
-        receiver_id = int(receiver_id)
-    except (TypeError, ValueError):
-        return
-
-    caller = User.query.get(caller_id)
-    receiver = User.query.get(receiver_id)
-
-    if not caller or not receiver:
-        return
-
-    payload = {
-        "caller_id": caller_id,
-        "caller_name": caller.full_name,
-        "receiver_id": receiver_id,
-        "call_type": call_type,
-    }
-
-    # ---------------------------------------------------------
-    # 1. Send through Socket.IO if receiver is connected
-    # ---------------------------------------------------------
-
-    socketio.emit(
-        "call_invite",
-        payload,
-        room=str(receiver_id)
-    )
-
-    # ---------------------------------------------------------
-    # 2. Send FCM notification
-    #    This allows incoming calls while app is backgrounded
-    # ---------------------------------------------------------
-
-    send_incoming_call_notification(
-        receiver_id=receiver_id,
-        caller_id=caller_id,
-        caller_name=caller.full_name,
-        call_type=call_type
-    )
-
-    print(
-        f"📞 CALL INVITE: "
-        f"{caller_id} -> {receiver_id} ({call_type})"
-    )
-@socketio.on("call_accept")
-def handle_call_accept(data):
-
-    caller_id = connected_socket_user(request.sid)
-
-    if not caller_id:
-        return
-
-    receiver_id = data.get("receiver_id")
-
-    if not receiver_id:
-        return
-
-    socketio.emit(
-        "call_accept",
-        {
-            "receiver_id": caller_id,
-        },
-        room=str(receiver_id)
-    )
-
-
-@socketio.on("call_reject")
-def handle_call_reject(data):
-
-    receiver_id = connected_socket_user(request.sid)
-
-    if not receiver_id:
-        return
-
-    caller_id = data.get("caller_id")
-
-    if not caller_id:
-        return
-
-    socketio.emit(
-        "call_reject",
-        {
-            "receiver_id": receiver_id,
-        },
-        room=str(caller_id)
-    )
-
-
-@socketio.on("call_end")
-def handle_call_end(data):
-
-    user_id = connected_socket_user(request.sid)
-
-    if not user_id:
-        return
-
-    other_user_id = data.get("other_user_id")
-
-    if not other_user_id:
-        return
-
-    socketio.emit(
-        "call_end",
-        {
-            "user_id": user_id,
-        },
-        room=str(other_user_id)
     )
 @api_bp.post("/notifications/fcm-token")
 @jwt_required()
