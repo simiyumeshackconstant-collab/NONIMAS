@@ -72,8 +72,6 @@ cors.init_app(
     }
 )
 
-mqtt_service.flask_app = app
-mqtt_service.connect()
 # ==========================================================
 # CLOUDINARY
 # ==========================================================
@@ -96,7 +94,8 @@ app.register_blueprint(
     api_bp,
     url_prefix="/api"
 )
-
+mqtt_service.flask_app = app
+mqtt_service.connect()
 
 # ==========================================================
 # START APPLICATION
