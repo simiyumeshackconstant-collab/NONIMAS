@@ -529,26 +529,40 @@ class MQTTService:
     # CALL ACCEPT
     # =========================================================
 
-    def handle_call_accept(
-        self,
-        topic,
-        payload
-    ):
+    def handle_call_accept(self, topic, payload):
 
-        caller_id = payload.get("caller_id")
-        receiver_id = payload.get("receiver_id")
+        try:
+            parts = topic.split("/")
 
-        if not caller_id or not receiver_id:
+            if (
+                len(parts) != 3
+                or parts[:2] != ["nonimas", "in"]
+            ):
+                return
+
+            sender_id = int(parts[2])
+            caller_id = int(payload.get("caller_id"))
+
+        except (TypeError, ValueError):
+            return
+
+        if sender_id == caller_id:
+            return
+
+        caller = User.query.get(caller_id)
+        receiver = User.query.get(sender_id)
+ 
+        if not caller or not receiver:
             return
 
         self.publish(
             self.user_topic(caller_id),
             {
                 "type": "call_accept",
-                "receiver_id": receiver_id
+                "receiver_id": sender_id
             }
         )
-
+        
     # =========================================================
     # CALL REJECT
     # =========================================================
