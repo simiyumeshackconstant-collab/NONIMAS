@@ -273,6 +273,12 @@ class MQTTService:
                 topic,
                 payload
             )
+        elif event_type in (
+            "webrtc_offer",
+            "webrtc_answer",
+            "webrtc_ice_candidate",
+        ):
+            self.handle_webrtc_signal(topic, payload)
         elif event_type == "messages_read":
 
             self.handle_messages_read(
@@ -467,7 +473,58 @@ class MQTTService:
                 "⚠️ FCM CALL NOTIFICATION ERROR:",
                 repr(e)
             )
+    
+    def handle_webrtc_signal(self, topic, payload):
+        """Forward WebRTC signaling to the intended participant."""
 
+        event_type = payload.get("type")
+
+        # Get sender ID from the inbound MQTT topic.
+        try:
+            topic_parts = topic.split("/")
+            if len(topic_parts) != 3 or topic_parts[0:2] != ["nonimas", "in"]:
+                print("Rejected WebRTC signal: invalid topic")
+                return
+
+            sender_id = int(topic_parts[2])
+            receiver_id = int(payload.get("receiver_id"))
+
+        except (TypeError, ValueError):
+            print("Rejected WebRTC signal: invalid participant IDs")
+            return
+
+        if sender_id == receiver_id:
+            print("Rejected WebRTC signal: sender and receiver are identical")
+            return
+
+        # Only permit supported WebRTC signaling events.
+        if event_type not in (
+            "webrtc_offer",
+            "webrtc_answer",
+            "webrtc_ice_candidate",
+        ):
+            print("Rejected unknown WebRTC event:", event_type)
+            return
+
+        # Validate the required payload for each event.
+        if event_type in ("webrtc_offer", "webrtc_answer"):
+            if not isinstance(payload.get("sdp"), str) or not payload["sdp"]:
+                print("Rejected WebRTC signal: missing SDP")
+                return
+
+        elif event_type == "webrtc_ice_candidate":
+            if not isinstance(payload.get("candidate"), str):
+                print("Rejected WebRTC signal: missing ICE candidate")
+                return
+
+        forwarded_payload = dict(payload)
+        forwarded_payload["sender_id"] = sender_id
+
+        self.publish(
+            self.user_topic(receiver_id),
+            forwarded_payload,
+            qos=1,
+        )
     # =========================================================
     # CALL ACCEPT
     # =========================================================
