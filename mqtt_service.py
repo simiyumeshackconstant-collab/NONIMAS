@@ -96,7 +96,6 @@ class MQTTService:
     # =========================================================
     # CONNECT CALLBACK
     # =========================================================
-
     def _on_connect(
         self,
         client,
@@ -105,42 +104,48 @@ class MQTTService:
         reason_code,
         properties=None
     ):
-
         print("========================================")
         print("📡 MQTT CONNECT RESULT")
         print("📡 REASON CODE:", reason_code)
         print("========================================")
 
-        if reason_code == 0:
-
-            self.connected = True
-
-            print("✅ MQTT CONNECTED")
-
-            # Backend listens for realtime events
-            # published by Android clients.
-            client.subscribe(
-                "nonimas/in/+",
-                qos=1
-            )
-
-            print(
-                "📡 MQTT SUBSCRIBED:",
-                "nonimas/in/+"
-            )
-
-        else:
-
+        if reason_code != 0:
             self.connected = False
+            print("❌ MQTT CONNECTION REJECTED:", reason_code)
+            return
 
-            print(
-                "❌ MQTT CONNECTION REJECTED:",
-                reason_code
-            )
+        self.connected = True
+        print("✅ MQTT CONNECTED")
 
-    # =========================================================
-    # DISCONNECT CALLBACK
-    # =========================================================
+        result, mid = client.subscribe("nonimas/in/+", qos=1)
+
+        if result != mqtt.MQTT_ERR_SUCCESS:
+            print("❌ MQTT SUBSCRIBE REQUEST FAILED:", result)
+            return
+
+        print(
+            "📡 MQTT SUBSCRIBE REQUEST SENT:",
+            "nonimas/in/+",
+            "MID:",
+            mid
+        )
+
+    def _on_subscribe(
+        self,
+        client,
+        userdata,
+        mid,
+        reason_code_list,
+        properties=None
+    ):
+        print("📡 MQTT SUBSCRIBE RESULT:", reason_code_list)
+
+        for reason_code in reason_code_list:
+            if getattr(reason_code, "is_failure", False):
+                print("❌ MQTT SUBSCRIPTION REJECTED:", reason_code)
+            else:
+                print("✅ MQTT SUBSCRIPTION ACCEPTED:", reason_code)
+
 
     def _on_disconnect(
         self,
