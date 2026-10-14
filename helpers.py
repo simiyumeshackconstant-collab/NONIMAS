@@ -15,6 +15,8 @@ from models import (
     Notification,
     Wallet,
     Gift,
+    UserDeviceToken,
+    User,
 )
 
 # ==========================================================
