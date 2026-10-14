@@ -214,6 +214,36 @@ def send_incoming_call_notification(
             print(
                 f"📞 FCM CALL FAILED → user={receiver_id}: {e}"
             )
+def send_chat_message_notification(
+    receiver_id,
+    sender_id,
+    sender_name,
+    message_text,
+    message_id
+):
+    tokens = UserDeviceToken.query.filter_by(
+        user_id=receiver_id
+    ).all()
+
+    for device in tokens:
+        try:
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=sender_name or "New message",
+                    body=message_text or "Sent you an attachment"
+                ),
+                data={
+                    "type": "new_message",
+                    "sender_id": str(sender_id),
+                    "message_id": str(message_id)
+                },
+                token=device.token
+            )
+
+            messaging.send(message)
+
+        except Exception as e:
+            print(f"FCM message notification failed: {e}")
 # ==========================================================
 # BUDDY MILESTONES
 # ==========================================================

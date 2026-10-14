@@ -52,7 +52,8 @@ from helpers import (
     allowed_file,
     add_to_wallet,
     send_incoming_call_notification,
-    create_buddy_milestone
+    create_buddy_milestone,
+    send_chat_message_notification
 )
 
 
@@ -3321,6 +3322,34 @@ def send_message():
 
         db.session.add(message)
         db.session.commit()
+        try:
+            sender = User.query.get(user_id)
+
+            notification_text = (
+                message.message.strip()
+                if message.message and message.message.strip()
+                else "Sent you an attachment"
+            )
+
+            if message.media_url and not (
+                message.message and message.message.strip()
+            ):
+                notification_text = "Sent you an attachment"
+
+            send_chat_message_notification(
+                receiver_id=receiver_id,
+                sender_id=user_id,
+                sender_name=(
+                    sender.full_name
+                    if sender and sender.full_name
+                    else "Nonimas user"
+                ),
+                message_text=notification_text[:200],
+                message_id=message.id
+            )
+
+        except Exception as e:
+            print(f"FCM chat notification error: {e}")
 
         payload = {
             "id": message.id,
