@@ -37,8 +37,6 @@ class MQTTService:
     def __init__(self, flask_app=None):
 
         self.flask_app = flask_app
-        self.client.on_subscribe = self._on_subscribe
-
         self.client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=MQTT_CLIENT_ID,
@@ -60,6 +58,7 @@ class MQTTService:
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
+        self.client.on_subscribe = self._on_subscribe
 
         self.connected = False
 
