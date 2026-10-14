@@ -226,6 +226,8 @@ def send_chat_message_notification(
     tokens = UserDeviceToken.query.filter_by(
         user_id=receiver_id
     ).all()
+    print(f"FCM DEBUG: receiver_id={receiver_id}")
+    print(f"FCM DEBUG: registered_tokens={len(tokens)}")
 
     for device in tokens:
         try:
