@@ -37,6 +37,7 @@ class MQTTService:
     def __init__(self, flask_app=None):
 
         self.flask_app = flask_app
+        self.client.on_subscribe = self._on_subscribe
 
         self.client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
