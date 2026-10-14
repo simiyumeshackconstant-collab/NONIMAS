@@ -3350,7 +3350,6 @@ def send_message():
 
         except Exception as e:
             print(f"FCM chat notification error: {e}")
-
         payload = {
             "id": message.id,
             "sender": user_id,
