@@ -173,6 +173,59 @@ def create_notification(
 
     return notification
 
+def send_chat_message_notification(
+    receiver_id,
+    sender_id,
+    sender_name,
+    message_text,
+    message_id
+):
+    tokens = UserDeviceToken.query.filter_by(
+        user_id=receiver_id
+    ).all()
+
+    if not tokens:
+        print(
+            f"FCM: No registered tokens for user {receiver_id}"
+        )
+        return
+
+    for device in tokens:
+        try:
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=sender_name or "New message",
+                    body=message_text or "Sent you an attachment"
+                ),
+                data={
+                    "type": "new_message",
+                    "sender_id": str(sender_id),
+                    "receiver_id": str(receiver_id),
+                    "message_id": str(message_id)
+                },
+                android=messaging.AndroidConfig(
+                    priority="high",
+                    notification=messaging.AndroidNotification(
+                        channel_id="nonimas_messages",
+                        sound="default"
+                    )
+                ),
+                token=device.token
+            )
+
+            response = messaging.send(message)
+
+            print(
+                f"FCM MESSAGE SENT: receiver={receiver_id}, "
+                f"message_id={message_id}, response={response}"
+            )
+
+        except Exception as e:
+            print(
+                f"FCM MESSAGE FAILED: receiver={receiver_id}, "
+                f"error={e}"
+            )
+
 def send_incoming_call_notification(
     receiver_id,
     caller_id,
@@ -185,69 +238,39 @@ def send_incoming_call_notification(
 
     if not tokens:
         print(
-            f"📞 FCM: no device tokens for user {receiver_id}"
+            f"FCM CALL: No device tokens for user {receiver_id}"
         )
         return
 
     for device in tokens:
-
         try:
-
             message = messaging.Message(
                 data={
                     "type": "incoming_call",
                     "caller_id": str(caller_id),
                     "caller_name": caller_name or "Nonimas user",
+                    "receiver_id": str(receiver_id),
                     "call_type": call_type or "voice"
                 },
+                android=messaging.AndroidConfig(
+                    priority="high"
+                ),
                 token=device.token
             )
 
             response = messaging.send(message)
 
             print(
-                f"📞 FCM CALL SENT → user={receiver_id} "
-                f"token={device.token[:12]}... "
-                f"response={response}"
+                f"FCM CALL SENT: receiver={receiver_id}, "
+                f"caller={caller_id}, response={response}"
             )
 
         except Exception as e:
-
             print(
-                f"📞 FCM CALL FAILED → user={receiver_id}: {e}"
-            )
-def send_chat_message_notification(
-    receiver_id,
-    sender_id,
-    sender_name,
-    message_text,
-    message_id
-):
-    tokens = UserDeviceToken.query.filter_by(
-        user_id=receiver_id
-    ).all()
-    print(f"FCM DEBUG: receiver_id={receiver_id}")
-    print(f"FCM DEBUG: registered_tokens={len(tokens)}")
-
-    for device in tokens:
-        try:
-            message = messaging.Message(
-                notification=messaging.Notification(
-                    title=sender_name or "New message",
-                    body=message_text or "Sent you an attachment"
-                ),
-                data={
-                    "type": "new_message",
-                    "sender_id": str(sender_id),
-                    "message_id": str(message_id)
-                },
-                token=device.token
+                f"FCM CALL FAILED: receiver={receiver_id}, "
+                f"error={e}"
             )
 
-            messaging.send(message)
-
-        except Exception as e:
-            print(f"FCM message notification failed: {e}")
 # ==========================================================
 # BUDDY MILESTONES
 # ==========================================================

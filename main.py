@@ -3351,13 +3351,16 @@ def send_message():
         except Exception as e:
             print(f"FCM chat notification error: {e}")
         payload = {
-            "id": message.id,
-            "sender": user_id,
-            "receiver": receiver_id,
-            "message": message.message,
+            "type": "new_message",
+            "message_id": message.id,
+            "sender_id": user_id,
+            "receiver_id": receiver_id,
+            "message": message.message or "",
             "media_url": message.media_url,
             "media_type": message.media_type,
-            "created_at": message.created_at.strftime("%Y-%m-%d %H:%M")
+            "created_at": message.created_at.strftime(
+                "%Y-%m-%d %H:%M"
+            )
         }
 
         mqtt_service.publish(

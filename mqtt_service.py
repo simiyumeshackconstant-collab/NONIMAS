@@ -4,6 +4,7 @@ import ssl
 import threading
 from flask import Flask
 from models import User
+from extensions import db, migrate, jwt, cors
 from helpers import send_incoming_call_notification
 
 import paho.mqtt.client as mqtt
@@ -424,61 +425,83 @@ class MQTTService:
             "💬 MQTT NEW MESSAGE:",
             payload
         )
-    def handle_call_invite(
-        self,
-        topic,
-        payload
-    ):
+    
+    def handle_call_invite(self, topic, payload):
+        """Accept call invitations using the sender ID in the inbound topic."""
 
-        caller_id = payload.get("caller_id")
-        receiver_id = payload.get("receiver_id")
-        call_type = payload.get(
-            "call_type",
-            "voice"
-        )
+        # Expected topic: nonimas/in/<authenticated-user-id>
+        try:
+            parts = topic.split("/")
 
-        if not caller_id or not receiver_id:
+            if (
+                len(parts) != 3
+                or parts[:2] != ["nonimas", "in"]
+                or not parts[2].isdigit()
+            ):
+                print("Rejected call invite: invalid inbound topic")
+                return
+
+            # Do NOT trust caller_id supplied in the JSON payload.
+            caller_id = int(parts[2])
+
+            receiver_value = payload.get("receiver_id")
+            if receiver_value is None or not str(receiver_value).isdigit():
+                print("Rejected call invite: invalid receiver_id")
+                return
+
+            receiver_id = int(receiver_value)
+
+        except (TypeError, ValueError):
+            print("Rejected call invite: invalid participant IDs")
             return
 
+        # Reject self-calls.
+        if caller_id == receiver_id:
+            print("Rejected call invite: caller and receiver are identical")
+            return
 
-        caller = User.query.get(caller_id)
-        receiver = User.query.get(receiver_id)
+        # Validate call type.
+        call_type = payload.get("call_type", "voice")
+        if call_type not in ("voice", "video"):
+            print("Rejected call invite: unsupported call_type")
+            return
+
+        caller = db.session.get(User, caller_id)
+        receiver = db.session.get(User, receiver_id)
 
         if not caller or not receiver:
+            print("Rejected call invite: user not found")
             return
 
+        # Construct trusted identity data from the database.
         call_payload = {
             "type": "call_invite",
-            "caller_id": caller_id,
+            "caller_id": caller.id,
             "caller_name": caller.full_name,
-            "receiver_id": receiver_id,
-            "call_type": call_type
+            "receiver_id": receiver.id,
+            "call_type": call_type,
         }
 
-        self.publish(
-            self.user_topic(receiver_id),
-            call_payload
+        published = self.publish(
+            self.user_topic(receiver.id),
+            call_payload,
+            qos=1,
         )
 
-        # Keep FCM for background incoming calls.
+        if not published:
+            print("Call invite: MQTT forwarding failed")
+
+        # Send FCM only after the invite has passed validation.
         try:
-
-        
-
             send_incoming_call_notification(
-                receiver_id=receiver_id,
-                caller_id=caller_id,
+                receiver_id=receiver.id,
+                caller_id=caller.id,
                 caller_name=caller.full_name,
-                call_type=call_type
+                call_type=call_type,
             )
-
         except Exception as e:
+            print("FCM CALL NOTIFICATION ERROR:", repr(e))
 
-            print(
-                "⚠️ FCM CALL NOTIFICATION ERROR:",
-                repr(e)
-            )
-    
     def handle_webrtc_signal(self, topic, payload):
         """Forward WebRTC signaling to the intended participant."""
 
