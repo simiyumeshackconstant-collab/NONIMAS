@@ -245,6 +245,10 @@ def send_incoming_call_notification(
     for device in tokens:
         try:
             message = messaging.Message(
+                notification=messaging.Notification(
+                    title="Incoming Call",
+                    body=f"{caller_name} is calling you"
+                ),
                 data={
                     "type": "incoming_call",
                     "caller_id": str(caller_id),
@@ -253,7 +257,11 @@ def send_incoming_call_notification(
                     "call_type": call_type or "voice"
                 },
                 android=messaging.AndroidConfig(
-                    priority="high"
+                    priority="high",
+                    notification=messaging.AndroidNotification(
+                        channel_id="nonimas_calls",
+                        sound="default"
+                    )
                 ),
                 token=device.token
             )
