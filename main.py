@@ -26,7 +26,7 @@ from extensions import (
 from models import (
     User,
     Buddy,
-    userDeviceToken,
+    UserDeviceToken,
     Post,
     Like,
     Comment,
