@@ -34,6 +34,14 @@ MQTT_CLIENT_ID = os.getenv(
 
 
 class MQTTService:
+    EVENT_CALL_INVITE = "call_invite"
+    EVENT_CALL_RINGING = "call_ringing"
+    EVENT_CALL_BUSY = "call_busy"
+    EVENT_CALL_OFFLINE = "call_offline"
+    EVENT_CALL_ACCEPT = "call_accept"
+    EVENT_CALL_REJECT = "call_reject"
+    EVENT_CALL_END = "call_end"
+    EVENT_CALL_MISSED = "call_missed"
 
     def __init__(self, flask_app=None):
 
@@ -62,6 +70,10 @@ class MQTTService:
         self.client.on_subscribe = self._on_subscribe
 
         self.connected = False
+        # Protects active call state shared by MQTT callbacks.
+        self.call_lock = threading.RLock()
+        self.active_calls = {}
+        self.calls = {}
 
     # =========================================================
     # CONNECT
@@ -259,6 +271,9 @@ class MQTTService:
                 payload
             )
 
+        elif event_type == "call_ringing":
+            self.handle_call_ringing(topic, payload)
+
         elif event_type == "call_accept":
 
             self.handle_call_accept(
@@ -427,9 +442,8 @@ class MQTTService:
         )
     
     def handle_call_invite(self, topic, payload):
-        """Accept call invitations using the sender ID in the inbound topic."""
+        """Validate and route an incoming call invitation."""
 
-        # Expected topic: nonimas/in/<authenticated-user-id>
         try:
             parts = topic.split("/")
 
@@ -441,7 +455,6 @@ class MQTTService:
                 print("Rejected call invite: invalid inbound topic")
                 return
 
-            # Do NOT trust caller_id supplied in the JSON payload.
             caller_id = int(parts[2])
 
             receiver_value = payload.get("receiver_id")
@@ -455,12 +468,10 @@ class MQTTService:
             print("Rejected call invite: invalid participant IDs")
             return
 
-        # Reject self-calls.
         if caller_id == receiver_id:
-            print("Rejected call invite: caller and receiver are identical")
+            print("Rejected call invite: self-call")
             return
 
-        # Validate call type.
         call_type = payload.get("call_type", "voice")
         if call_type not in ("voice", "video"):
             print("Rejected call invite: unsupported call_type")
@@ -473,35 +484,144 @@ class MQTTService:
             print("Rejected call invite: user not found")
             return
 
-        # Construct trusted identity data from the database.
-        call_payload = {
-            "type": "call_invite",
-            "caller_id": caller.id,
-            "caller_name": caller.full_name,
-            "receiver_id": receiver.id,
-            "call_type": call_type,
-        }
+        import uuid
 
-        published = self.publish(
-            self.user_topic(receiver.id),
-            call_payload,
-            qos=1,
+        call_id = str(uuid.uuid4())
+
+        # Check and reserve both participants atomically.
+        with self.call_lock:
+            if caller_id in self.active_calls:
+                self.notify_call_user(
+                    caller_id,
+                    self.EVENT_CALL_BUSY,
+                    receiver_id=receiver_id,
+                    reason="caller_busy",
+                )
+                return
+
+            if receiver_id in self.active_calls:
+                self.notify_call_user(
+                    caller_id,
+                    self.EVENT_CALL_BUSY,
+                    receiver_id=receiver_id,
+                    reason="receiver_busy",
+                )
+                return
+            
+
+            call = {
+                "call_id": call_id,
+                "caller_id": caller_id,
+                "receiver_id": receiver_id,
+                "call_type": call_type,
+                "status": "ringing",
+                "answered": False,
+            }
+
+            self.calls[call_id] = call
+            self.active_calls[caller_id] = call_id
+            self.active_calls[receiver_id] = call_id
+        published = self.notify_call_user(
+            receiver_id,
+            self.EVENT_CALL_INVITE,
+            call_id=call_id,
+            caller_id=caller_id,
+            caller_name=caller.full_name or "Nonimas user",
+            receiver_id=receiver_id,
+            call_type=call_type,
         )
 
         if not published:
-            print("Call invite: MQTT forwarding failed")
+            self._finish_call(call_id)
 
-        # Send FCM only after the invite has passed validation.
+            self.notify_call_user(
+                caller_id,
+                self.EVENT_CALL_OFFLINE,
+                call_id=call_id,
+                receiver_id=receiver_id,
+            )
+            return
         try:
             send_incoming_call_notification(
-                receiver_id=receiver.id,
-                caller_id=caller.id,
+                receiver_id=receiver_id,
+                caller_id=caller_id,
                 caller_name=caller.full_name,
                 call_type=call_type,
             )
         except Exception as e:
             print("FCM CALL NOTIFICATION ERROR:", repr(e))
+    def handle_call_ringing(self, topic, payload):
+        """Forward ringing confirmation to the original caller."""
 
+        try:
+            parts = topic.split("/")
+
+            if (
+                len(parts) != 3
+                or parts[:2] != ["nonimas", "in"]
+                or not parts[2].isdigit()
+            ):
+                print("Rejected call_ringing: invalid inbound topic")
+                return
+
+            receiver_id = int(parts[2])
+            call_id = str(payload.get("call_id", "")).strip()
+
+            if not call_id:
+                print("Rejected call_ringing: missing call_id")
+                return
+
+        except (TypeError, ValueError):
+            print("Rejected call_ringing: invalid payload")
+            return
+
+        with self.call_lock:
+            call = self.calls.get(call_id)
+
+            if not call:
+                print("Rejected call_ringing: call not found")
+                return
+
+            if call["receiver_id"] != receiver_id:
+                print("Rejected call_ringing: receiver mismatch")
+                return
+
+            if call["status"] != "ringing":
+                print("Rejected call_ringing: call is no longer ringing")
+                return
+
+            caller_id = call["caller_id"]
+
+        self.notify_call_user(
+           caller_id,
+            self.EVENT_CALL_RINGING,
+            call_id=call_id,
+            receiver_id=receiver_id,
+        )
+
+        print(
+            f"📞 RINGING CONFIRMED: "
+            f"call_id={call_id}, receiver={receiver_id}"
+        )
+    def _finish_call(self, call_id):
+        """Remove a call and release both participants."""
+
+        with self.call_lock:
+            call = self.calls.pop(call_id, None)
+
+            if not call:
+                return None
+
+            caller_id = call["caller_id"]
+            receiver_id = call["receiver_id"]
+
+            if self.active_calls.get(caller_id) == call_id:
+                self.active_calls.pop(caller_id, None)
+
+            if self.active_calls.get(receiver_id) == call_id:
+                self.active_calls.pop(receiver_id, None)
+
+            return call
     def handle_webrtc_signal(self, topic, payload):
         """Forward WebRTC signaling to the intended participant."""
 
@@ -639,7 +759,16 @@ class MQTTService:
                 "type": "call_end",
                 "user_id": user_id
             }
+        ) 
+    def notify_call_user(self, user_id, event_type, **data):
+        payload = {
+            "type": event_type,
+            **data,
+        }
+
+        return self.publish(
+            self.user_topic(user_id),
+            payload,
+            qos=1,
         )
-
-
 mqtt_service = MQTTService()
