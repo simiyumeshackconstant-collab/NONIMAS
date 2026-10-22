@@ -192,23 +192,26 @@ def send_chat_message_notification(
 
     for device in tokens:
         try:
+            # IMPORTANT:
+            # Do not set notification=messaging.Notification(...).
+            # A data-only message lets the Android service build
+            # the notification and attach the Reply action.
+
             message = messaging.Message(
-                notification=messaging.Notification(
-                    title=sender_name or "New message",
-                    body=message_text or "Sent you an attachment"
-                ),
                 data={
                     "type": "new_message",
                     "sender_id": str(sender_id),
                     "receiver_id": str(receiver_id),
-                    "message_id": str(message_id)
+                    "sender_name": str(
+                        sender_name or "Nonimas user"
+                    ),
+                    "message_id": str(message_id),
+                    "body": str(
+                        message_text or "Sent you an attachment"
+                    )
                 },
                 android=messaging.AndroidConfig(
-                    priority="high",
-                    notification=messaging.AndroidNotification(
-                        channel_id="nonimas_messages",
-                        sound="default"
-                    )
+                    priority="high"
                 ),
                 token=device.token
             )
@@ -216,16 +219,19 @@ def send_chat_message_notification(
             response = messaging.send(message)
 
             print(
-                f"FCM MESSAGE SENT: receiver={receiver_id}, "
-                f"message_id={message_id}, response={response}"
+                f"FCM DATA MESSAGE SENT: "
+                f"receiver={receiver_id}, "
+                f"sender={sender_id}, "
+                f"message_id={message_id}, "
+                f"response={response}"
             )
 
         except Exception as e:
             print(
-                f"FCM MESSAGE FAILED: receiver={receiver_id}, "
+                f"FCM MESSAGE FAILED: "
+                f"receiver={receiver_id}, "
                 f"error={e}"
             )
-
 def send_incoming_call_notification(
     receiver_id,
     caller_id,
@@ -244,24 +250,23 @@ def send_incoming_call_notification(
 
     for device in tokens:
         try:
+            # IMPORTANT:
+            # This must be a data-only message.
+            # Android will construct the call notification and
+            # attach the Accept and Decline actions.
+
             message = messaging.Message(
-                notification=messaging.Notification(
-                    title="Incoming Call",
-                    body=f"{caller_name} is calling you"
-                ),
                 data={
                     "type": "incoming_call",
                     "caller_id": str(caller_id),
-                    "caller_name": caller_name or "Nonimas user",
+                    "caller_name": str(
+                        caller_name or "Nonimas user"
+                    ),
                     "receiver_id": str(receiver_id),
-                    "call_type": call_type or "voice"
+                    "call_type": str(call_type or "voice")
                 },
                 android=messaging.AndroidConfig(
-                    priority="high",
-                    notification=messaging.AndroidNotification(
-                        channel_id="nonimas_calls",
-                        sound="default"
-                    )
+                    priority="high"
                 ),
                 token=device.token
             )
@@ -269,16 +274,20 @@ def send_incoming_call_notification(
             response = messaging.send(message)
 
             print(
-                f"FCM CALL SENT: receiver={receiver_id}, "
-                f"caller={caller_id}, response={response}"
+                f"FCM DATA CALL SENT: "
+                f"receiver={receiver_id}, "
+                f"caller={caller_id}, "
+                f"call_type={call_type}, "
+                f"response={response}"
             )
 
         except Exception as e:
             print(
-                f"FCM CALL FAILED: receiver={receiver_id}, "
+                f"FCM CALL FAILED: "
+                f"receiver={receiver_id}, "
+                f"caller={caller_id}, "
                 f"error={e}"
             )
-
 # ==========================================================
 # BUDDY MILESTONES
 # ==========================================================
