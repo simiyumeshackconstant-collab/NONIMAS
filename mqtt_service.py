@@ -818,7 +818,112 @@ class MQTTService:
                 )
 
         return True
+    def _create_call_history(self, call, outcome, duration_seconds=0):
+   
+        call_id = str(call["call_id"])
+        caller_id = int(call["caller_id"])
+        receiver_id = int(call["receiver_id"])
 
+        duration_seconds = max(0, int(duration_seconds or 0))
+
+        # Define which records each participant should receive.
+        if outcome == "declined":
+            entries = [
+                (caller_id, receiver_id, "📞 Call declined"),
+                (receiver_id, caller_id, "📞 You declined the call"),
+            ]
+
+        elif outcome == "missed":
+            entries = [
+                (caller_id, receiver_id, "📞 No answer"),
+                (receiver_id, caller_id, "📞 You missed a call"),
+            ]
+
+        elif outcome == "cancelled":
+            # Caller cancelled before the receiver answered.
+            # Do not create a "Call cancelled" message for the caller.
+            entries = [
+                (receiver_id, caller_id, "📞 Missed call"),
+            ]
+
+        elif outcome == "offline":
+            entries = [
+                (caller_id, receiver_id, "📞 No answer"),
+                (receiver_id, caller_id, "📞 You missed a call"),
+            ]
+
+        elif outcome == "busy":
+            entries = [
+                (caller_id, receiver_id, "📞 User is busy"),
+                (receiver_id, caller_id, "📞 Missed call"),
+            ]
+
+        elif outcome == "ended":
+            entries = [
+                (caller_id, receiver_id, "📞 Call ended"),
+                (receiver_id, caller_id, "📞 Call ended"),
+            ]
+
+        else:
+            logging.warning(
+                "Unknown call-history outcome '%s' for call %s",
+                outcome,
+                call_id,
+            )
+            return False
+
+        messages_to_publish = []
+
+        try:
+            for sender_id, recipient_id, message_text in entries:
+                existing = ChatMessage.query.filter_by(
+                    call_id=call_id,
+                    sender_id=sender_id,
+                ).first()
+
+                if existing:
+                    continue
+
+                message = ChatMessage(
+                    sender_id=sender_id,
+                    receiver_id=recipient_id,
+                    message=message_text,
+                    media_url=None,
+                    media_type=None,
+                    message_type="call",
+                    call_id=call_id,
+                    call_duration=duration_seconds,
+                    is_read=False,
+                    created_at=datetime.utcnow(),
+                )
+
+                db.session.add(message)
+                db.session.flush()
+
+                messages_to_publish.append(message)
+
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+
+            logging.exception(
+                "Failed to create call history for %s",
+                call_id,
+            )
+
+            return False
+
+        for message in messages_to_publish:
+            try:
+                self._publish_call_history(message)
+            except Exception:
+                logging.exception(
+                    "Failed to publish call-history message %s",
+                    message.id,
+                )
+
+        return True
     def _finish_call(self, call_id):
         """Release participants and cancel a call's timeout timer."""
 
@@ -1254,8 +1359,8 @@ class MQTTService:
 
         elif call["status"] in ("calling", "ringing"):
             # The call ended before the receiver accepted.
-            outcome = "missed"
-            end_reason = "no_answer"
+            outcome = "cancelled"
+            end_reason = "cancelled"
 
         else:
             # Accepted but never reached WebRTC CONNECTED.
@@ -1275,7 +1380,6 @@ class MQTTService:
             other_user_id,
             self.EVENT_CALL_END,
             call_id=call_id,
-            user_id=sender_id,
             other_user_id=other_user_id,
         )
 
@@ -1417,16 +1521,14 @@ class MQTTService:
         end_reason,
         ended_at=None,
     ):
-        """
-        Finalize a call once, persist its outcome and duration,
-        create call history, and release participants.
-        """
-
         call_id = str(call_id)
         ended_at = ended_at or datetime.utcnow()
 
         if not self.flask_app:
-            logging.error("Cannot finalize call without Flask app")
+            logging.error(
+                "Cannot finalize call without Flask app: %s",
+                call_id,
+            )
             return False
 
         with self.flask_app.app_context():
@@ -1440,7 +1542,7 @@ class MQTTService:
 
                 if not session:
                     logging.warning(
-                        "Cannot finalize missing session %s",
+                        "Cannot finalize missing call session: %s",
                         call_id,
                     )
                     self._finish_call(call_id)
@@ -1450,25 +1552,24 @@ class MQTTService:
                     self._finish_call(call_id)
                     return False
 
+                if outcome not in self.TERMINAL_CALL_STATUSES:
+                    logging.error(
+                        "Invalid terminal outcome '%s' for call %s",
+                        outcome,
+                        call_id,
+                    )
+                    return False
+
                 connected_at = session.connected_at
 
-                if connected_at:
-                    duration = max(
+                duration = (
+                    max(
                         0,
                         int((ended_at - connected_at).total_seconds()),
                     )
-                else:
-                    duration = 0
-
-                session.status = outcome
-                session.end_reason = end_reason
-                session.ended_at = ended_at
-                session.duration_seconds = duration
-
-                create_history = not session.history_created
-
-                if create_history:
-                    session.history_created = True
+                    if connected_at
+                    else 0
+                )
 
                 call = {
                     "call_id": session.call_id,
@@ -1476,6 +1577,10 @@ class MQTTService:
                     "receiver_id": session.receiver_id,
                     "call_type": session.call_type,
                 }
+                session.status = outcome
+                session.end_reason = end_reason
+                session.ended_at = ended_at
+                session.duration_seconds = duration
 
                 db.session.commit()
 
@@ -1487,20 +1592,44 @@ class MQTTService:
                 )
                 return False
 
-            if create_history:
-                self._create_call_history(
-                    call,
-                    outcome=outcome,
-                    duration_seconds=duration,
+            history_saved = self._create_call_history(
+                call,
+                outcome=outcome,
+                duration_seconds=duration,
+            )
+
+            if history_saved:
+                try:
+                    session = CallSession.query.filter_by(
+                        call_id=call_id
+                    ).first()
+
+                    if session and not session.history_created:
+                        session.history_created = True
+                        db.session.commit()
+
+                except Exception:
+                    db.session.rollback()
+                    logging.exception(
+                        "Failed to update history_created for call %s",
+                        call_id,
+                    )
+
+            else:
+                logging.error(
+                    "Call %s finalized, but call history was not saved. "
+                    "history_created remains false for recovery.",
+                    call_id,
                 )
 
             self._finish_call(call_id)
 
             logging.info(
-                "Call finalized: id=%s outcome=%s duration=%s",
+                "Call finalized: id=%s outcome=%s duration=%s history_saved=%s",
                 call_id,
                 outcome,
                 duration,
+                history_saved,
             )
 
             return True
