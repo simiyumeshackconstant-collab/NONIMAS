@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Numeric
+from sqlalchemy import Numeric, UniqueConstraint
 from sqlalchemy.orm import validates
 
 from extensions import db
@@ -117,6 +117,80 @@ class ChatMessage(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     deleted_for_sender = db.Column(db.Boolean,nullable=False,default=False)
     deleted_for_receiver = db.Column(db.Boolean,nullable=False,default=False)
+    message_type = db.Column(db.String(20),nullable=False,default="text",)
+    call_id = db.Column(db.String(36),nullable=True,index=True,)
+    call_duration = db.Column(db.Integer,nullable=True,)
+    __table_args__ = (db.UniqueConstraint("call_id","sender_id",name="uq_chat_message_call_sender",),)
+class CallSession(db.Model):
+    __tablename__ = "call_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Unique identifier shared by all events for this call.
+    call_id = db.Column(db.String(36), nullable=False, unique=True, index=True)
+
+    caller_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+        index=True,
+    )
+
+    receiver_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+        index=True,
+    )
+
+    call_type = db.Column(
+        db.String(10),
+        nullable=False,
+        default="voice",
+    )
+
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default="calling",
+        index=True,
+    )
+
+    end_reason = db.Column(db.String(30), nullable=True)
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    ringing_at = db.Column(db.DateTime, nullable=True)
+
+    accepted_at = db.Column(db.DateTime, nullable=True)
+
+    # Set when the actual media connection is established.
+    connected_at = db.Column(db.DateTime, nullable=True)
+
+    ended_at = db.Column(db.DateTime, nullable=True)
+
+    duration_seconds = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+
+    # Protects call-history generation against repeated MQTT events.
+    history_created = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    def __repr__(self):
+        return (
+            f"<CallSession call_id={self.call_id!r} "
+            f"status={self.status!r}>"
+        )
 class ChatClear(db.Model):
     __tablename__ = "chat_clears"
 

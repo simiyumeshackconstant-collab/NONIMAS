@@ -1,12 +1,14 @@
 import os
+import logging
+import uuid
 import json
 import ssl
 import threading
 from flask import Flask
-from models import User
+from datetime import datetime, timedelta
+from models import User, ChatMessage, CallSession
 from extensions import db, migrate, jwt, cors
-from helpers import send_incoming_call_notification
-
+from helpers import send_incoming_call_notification, send_chat_message_notification
 import paho.mqtt.client as mqtt
 
 
@@ -39,6 +41,7 @@ class MQTTService:
     EVENT_CALL_BUSY = "call_busy"
     EVENT_CALL_OFFLINE = "call_offline"
     EVENT_CALL_ACCEPT = "call_accept"
+    EVENT_CALL_CONNECTED = "call_connected"
     EVENT_CALL_REJECT = "call_reject"
     EVENT_CALL_END = "call_end"
     EVENT_CALL_MISSED = "call_missed"
@@ -74,6 +77,7 @@ class MQTTService:
         self.call_lock = threading.RLock()
         self.active_calls = {}
         self.calls = {}
+        self.call_timers = {}
 
     # =========================================================
     # CONNECT
@@ -280,6 +284,11 @@ class MQTTService:
                 topic,
                 payload
             )
+        elif event_type == self.EVENT_CALL_CONNECTED:
+            self.handle_call_connected(topic, payload)
+
+        elif event_type == self.EVENT_CALL_MISSED:
+            self.handle_call_missed(topic, payload)
 
         elif event_type == "call_reject":
 
@@ -440,9 +449,132 @@ class MQTTService:
             "💬 MQTT NEW MESSAGE:",
             payload
         )
-    
+    TERMINAL_CALL_STATUSES = {
+        "ended",
+        "declined",
+        "missed",
+        "cancelled",
+        "failed",
+        "busy",
+        "offline",
+    }
+
+    def _get_active_call(self, user_a, user_b, call_id=None):
+        """Find an active call shared by two participants."""
+
+        try:
+            user_a = int(user_a)
+            user_b = int(user_b)
+        except (TypeError, ValueError):
+            return None
+
+        if user_a == user_b:
+            return None
+
+        with self.call_lock:
+            if call_id:
+                call = self.calls.get(str(call_id))
+
+                if not call:
+                    return None
+
+                participants = {
+                    int(call["caller_id"]),
+                    int(call["receiver_id"]),
+                }
+
+                if participants == {user_a, user_b}:
+                    return call
+
+                return None
+
+            active_call_id = self.active_calls.get(user_a)
+
+            if not active_call_id:
+                return None
+
+            call = self.calls.get(active_call_id)
+
+            if not call:
+                return None
+
+            participants = {
+                int(call["caller_id"]),
+                int(call["receiver_id"]),
+            }
+
+            if participants != {user_a, user_b}:
+                return None
+
+            return call
+
+    def _get_call_session(self, call_id):
+        return CallSession.query.filter_by(
+            call_id=str(call_id)
+        ).with_for_update().first()
+
+    def _update_call_session(self, call_id, **updates):
+        """Update a call session within the current Flask app context."""
+
+        session = self._get_call_session(call_id)
+
+        if not session:
+            logging.error(
+                "Call session not found: %s",
+                call_id,
+            )
+            return None
+
+        for field, value in updates.items():
+            if hasattr(session, field):
+                setattr(session, field, value)
+
+        db.session.commit()
+        return session
+
+    def _publish_call_history(self, message):
+        """Publish a persisted call-history message to both chat clients."""
+
+        payload = {
+            "type": "new_message",
+            "message_id": message.id,
+            "sender_id": message.sender_id,
+            "receiver_id": message.receiver_id,
+            "message": message.message,
+            "media_url": message.media_url,
+            "media_type": message.media_type,
+            "message_type": message.message_type,
+            "call_id": message.call_id,
+            "call_duration": message.call_duration,
+            "created_at": (
+                message.created_at.isoformat()
+                if message.created_at
+                else datetime.utcnow().isoformat()
+            ),
+            "is_read": message.is_read,
+        }
+
+        self.notify_call_user(
+            message.sender_id,
+            "new_message",
+            **{
+                key: value
+                for key, value in payload.items()
+                if key != "type"
+            },
+        )
+
+        self.notify_call_user(
+            message.receiver_id,
+            "new_message",
+            **{
+                key: value
+                for key, value in payload.items()
+                if key != "type"
+            },
+        )
     def handle_call_invite(self, topic, payload):
-        """Validate and route an incoming call invitation."""
+        """Create and route a persisted outgoing call session."""
 
         try:
             parts = topic.split("/")
@@ -452,43 +584,36 @@ class MQTTService:
                 or parts[:2] != ["nonimas", "in"]
                 or not parts[2].isdigit()
             ):
-                print("Rejected call invite: invalid inbound topic")
+                logging.warning("Invalid call_invite topic: %s", topic)
                 return
 
             caller_id = int(parts[2])
-
-            receiver_value = payload.get("receiver_id")
-            if receiver_value is None or not str(receiver_value).isdigit():
-                print("Rejected call invite: invalid receiver_id")
-                return
-
-            receiver_id = int(receiver_value)
+            receiver_id = int(payload.get("receiver_id"))
 
         except (TypeError, ValueError):
-            print("Rejected call invite: invalid participant IDs")
+            logging.warning("Invalid call_invite participant IDs")
             return
 
         if caller_id == receiver_id:
-            print("Rejected call invite: self-call")
+            logging.warning("Rejected self-call")
             return
 
         call_type = payload.get("call_type", "voice")
+
         if call_type not in ("voice", "video"):
-            print("Rejected call invite: unsupported call_type")
+            logging.warning("Unsupported call type: %s", call_type)
             return
 
         caller = db.session.get(User, caller_id)
         receiver = db.session.get(User, receiver_id)
 
         if not caller or not receiver:
-            print("Rejected call invite: user not found")
+            logging.warning("Call participant does not exist")
             return
 
-        import uuid
-
         call_id = str(uuid.uuid4())
+        now = datetime.utcnow()
 
-        # Check and reserve both participants atomically.
         with self.call_lock:
             if caller_id in self.active_calls:
                 self.notify_call_user(
@@ -507,32 +632,66 @@ class MQTTService:
                     reason="receiver_busy",
                 )
                 return
-            
 
             call = {
                 "call_id": call_id,
                 "caller_id": caller_id,
                 "receiver_id": receiver_id,
                 "call_type": call_type,
-                "status": "ringing",
+                "status": "calling",
                 "answered": False,
+                "connected_at": None,
             }
 
             self.calls[call_id] = call
             self.active_calls[caller_id] = call_id
             self.active_calls[receiver_id] = call_id
+
+        try:
+            session = CallSession(
+                call_id=call_id,
+                caller_id=caller_id,
+                receiver_id=receiver_id,
+                call_type=call_type,
+                status="calling",
+                created_at=now,
+                duration_seconds=0,
+                history_created=False,
+            )
+
+            db.session.add(session)
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+            logging.exception("Failed to persist call session")
+
+            self._finish_call(call_id)
+
+            self.notify_call_user(
+                caller_id,
+                self.EVENT_CALL_OFFLINE,
+                receiver_id=receiver_id,
+            )
+            return
+
         published = self.notify_call_user(
             receiver_id,
             self.EVENT_CALL_INVITE,
             call_id=call_id,
             caller_id=caller_id,
-            caller_name=caller.full_name or "Nonimas user",
+            caller_name=getattr(caller, "full_name", None)
+            or "Nonimas user",
             receiver_id=receiver_id,
             call_type=call_type,
         )
 
         if not published:
-            self._finish_call(call_id)
+            self._finalize_call(
+                call_id,
+                outcome="offline",
+                end_reason="offline",
+            )
 
             self.notify_call_user(
                 caller_id,
@@ -541,17 +700,153 @@ class MQTTService:
                 receiver_id=receiver_id,
             )
             return
+
         try:
             send_incoming_call_notification(
                 receiver_id=receiver_id,
                 caller_id=caller_id,
-                caller_name=caller.full_name,
+                caller_name=getattr(caller, "full_name", None)
+                or "Nonimas user",
                 call_type=call_type,
             )
-        except Exception as e:
-            print("FCM CALL NOTIFICATION ERROR:", repr(e))
+        except Exception:
+            logging.exception("Failed to send incoming-call notification")
+
+        self._schedule_call_timeout(call_id)
+
+        logging.info(
+            "Call invitation created: call_id=%s caller=%s receiver=%s",
+            call_id,
+            caller_id,
+            receiver_id,
+        )
+
+    def _create_call_history(self, call, outcome, duration_seconds=0):
+        """
+        Create a history row for each participant.
+
+        UniqueConstraint(call_id, sender_id) protects against duplicates.
+        Call this only after the session has been finalized.
+        """
+
+        call_id = str(call["call_id"])
+        caller_id = int(call["caller_id"])
+        receiver_id = int(call["receiver_id"])
+
+        duration_seconds = max(0, int(duration_seconds or 0))
+
+        if outcome == "declined":
+            caller_text = "📞 Call declined"
+            receiver_text = "📞 You declined the call"
+
+        elif outcome == "missed":
+            caller_text = "📞 No answer"
+            receiver_text = "📞 You missed a call"
+
+        elif outcome == "ended":
+            caller_text = "📞 Call ended"
+            receiver_text = "📞 Call ended"
+
+        elif outcome == "cancelled":
+            caller_text = "📞 Call cancelled"
+            receiver_text = "📞 Missed call"
+
+        elif outcome == "offline":
+            caller_text = "📞 No answer"
+            receiver_text = "📞 You missed a call"
+
+        elif outcome == "busy":
+            caller_text = "📞 User is busy"
+            receiver_text = "📞 Missed call"
+
+        else:
+            caller_text = "📞 Call ended"
+            receiver_text = "📞 Call ended"
+
+        messages_to_publish = []
+
+        try:
+            entries = [
+                (caller_id, receiver_id, caller_text),
+                (receiver_id, caller_id, receiver_text),
+            ]
+
+            for sender_id, recipient_id, text in entries:
+                existing = ChatMessage.query.filter_by(
+                    call_id=call_id,
+                    sender_id=sender_id,
+                ).first()
+
+                if existing:
+                    continue
+
+                message = ChatMessage(
+                    sender_id=sender_id,
+                    receiver_id=recipient_id,
+                    message=text,
+                    media_url=None,
+                    media_type=None,
+                    message_type="call",
+                    call_id=call_id,
+                    call_duration=duration_seconds,
+                    is_read=False,
+                    created_at=datetime.utcnow(),
+                )
+
+                db.session.add(message)
+                db.session.flush()
+
+                messages_to_publish.append(message)
+
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+            logging.exception(
+                "Failed to create call history for %s",
+                call_id,
+            )
+            return False
+
+        for message in messages_to_publish:
+            try:
+                self._publish_call_history(message)
+            except Exception:
+                logging.exception(
+                    "Failed to publish call history message %s",
+                    message.id,
+                )
+
+        return True
+
+    def _finish_call(self, call_id):
+        """Release participants and cancel a call's timeout timer."""
+
+        call_id = str(call_id)
+
+        with self.call_lock:
+            call = self.calls.pop(call_id, None)
+
+            timer = self.call_timers.pop(call_id, None)
+
+            if timer:
+                timer.cancel()
+
+            if not call:
+                return None
+
+            caller_id = int(call["caller_id"])
+            receiver_id = int(call["receiver_id"])
+
+            if self.active_calls.get(caller_id) == call_id:
+                self.active_calls.pop(caller_id, None)
+
+            if self.active_calls.get(receiver_id) == call_id:
+                self.active_calls.pop(receiver_id, None)
+
+            return call
     def handle_call_ringing(self, topic, payload):
-        """Forward ringing confirmation to the original caller."""
+        """Record that the receiver's device received the call."""
 
         try:
             parts = topic.split("/")
@@ -561,67 +856,57 @@ class MQTTService:
                 or parts[:2] != ["nonimas", "in"]
                 or not parts[2].isdigit()
             ):
-                print("Rejected call_ringing: invalid inbound topic")
                 return
 
             receiver_id = int(parts[2])
             call_id = str(payload.get("call_id", "")).strip()
 
             if not call_id:
-                print("Rejected call_ringing: missing call_id")
+                logging.warning("call_ringing missing call_id")
                 return
 
         except (TypeError, ValueError):
-            print("Rejected call_ringing: invalid payload")
             return
 
         with self.call_lock:
             call = self.calls.get(call_id)
 
             if not call:
-                print("Rejected call_ringing: call not found")
+                logging.warning("Unknown call_ringing call_id=%s", call_id)
                 return
 
-            if call["receiver_id"] != receiver_id:
-                print("Rejected call_ringing: receiver mismatch")
+            if int(call["receiver_id"]) != receiver_id:
+                logging.warning("call_ringing receiver mismatch")
                 return
 
-            if call["status"] != "ringing":
-                print("Rejected call_ringing: call is no longer ringing")
+            if call["status"] != "calling":
+                # Ignore duplicate ringing events.
+                if call["status"] == "ringing":
+                    return
                 return
 
-            caller_id = call["caller_id"]
+            call["status"] = "ringing"
+            caller_id = int(call["caller_id"])
+
+        try:
+            session = self._get_call_session(call_id)
+
+            if session and session.status == "calling":
+                session.status = "ringing"
+                session.ringing_at = datetime.utcnow()
+                db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+            logging.exception("Failed to update ringing state")
+            return
 
         self.notify_call_user(
-           caller_id,
+            caller_id,
             self.EVENT_CALL_RINGING,
             call_id=call_id,
             receiver_id=receiver_id,
         )
-
-        print(
-            f"📞 RINGING CONFIRMED: "
-            f"call_id={call_id}, receiver={receiver_id}"
-        )
-    def _finish_call(self, call_id):
-        """Remove a call and release both participants."""
-
-        with self.call_lock:
-            call = self.calls.pop(call_id, None)
-
-            if not call:
-                return None
-
-            caller_id = call["caller_id"]
-            receiver_id = call["receiver_id"]
-
-            if self.active_calls.get(caller_id) == call_id:
-                self.active_calls.pop(caller_id, None)
-
-            if self.active_calls.get(receiver_id) == call_id:
-                self.active_calls.pop(receiver_id, None)
-
-            return call
     def handle_webrtc_signal(self, topic, payload):
         """Forward WebRTC signaling to the intended participant."""
 
@@ -631,18 +916,18 @@ class MQTTService:
         try:
             topic_parts = topic.split("/")
             if len(topic_parts) != 3 or topic_parts[0:2] != ["nonimas", "in"]:
-                print("Rejected WebRTC signal: invalid topic")
+                logging.warning("Rejected WebRTC signal: invalid topic")
                 return
 
             sender_id = int(topic_parts[2])
             receiver_id = int(payload.get("receiver_id"))
 
         except (TypeError, ValueError):
-            print("Rejected WebRTC signal: invalid participant IDs")
+            logging.warning("Rejected WebRTC signal: invalid participant IDs")
             return
 
         if sender_id == receiver_id:
-            print("Rejected WebRTC signal: sender and receiver are identical")
+            logging.warning("Rejected WebRTC signal: sender and receiver are identical")
             return
 
         # Only permit supported WebRTC signaling events.
@@ -651,18 +936,18 @@ class MQTTService:
             "webrtc_answer",
             "webrtc_ice_candidate",
         ):
-            print("Rejected unknown WebRTC event:", event_type)
+            logging.warning("Rejected unknown WebRTC event: %s", event_type)
             return
 
         # Validate the required payload for each event.
         if event_type in ("webrtc_offer", "webrtc_answer"):
             if not isinstance(payload.get("sdp"), str) or not payload["sdp"]:
-                print("Rejected WebRTC signal: missing SDP")
+                logging.warning("Rejected WebRTC signal: missing SDP")
                 return
 
         elif event_type == "webrtc_ice_candidate":
             if not isinstance(payload.get("candidate"), str):
-                print("Rejected WebRTC signal: missing ICE candidate")
+                logging.warning("Rejected WebRTC signal: missing ICE candidate")
                 return
 
         forwarded_payload = dict(payload)
@@ -673,11 +958,8 @@ class MQTTService:
             forwarded_payload,
             qos=1,
         )
-    # =========================================================
-    # CALL ACCEPT
-    # =========================================================
-
     def handle_call_accept(self, topic, payload):
+        """Validate receiver acceptance and notify the caller."""
 
         try:
             parts = topic.split("/")
@@ -685,81 +967,387 @@ class MQTTService:
             if (
                 len(parts) != 3
                 or parts[:2] != ["nonimas", "in"]
+                or not parts[2].isdigit()
+            ):
+                logging.warning("Invalid call_accept topic")
+                return
+
+            receiver_id = int(parts[2])
+            caller_id = int(payload.get("caller_id"))
+            call_id = payload.get("call_id")
+
+        except (TypeError, ValueError):
+            logging.warning("Invalid call_accept payload")
+            return
+
+        if receiver_id == caller_id:
+            return
+
+        # Compatibility: older Android versions may omit call_id.
+        call = self._get_active_call(
+            caller_id,
+            receiver_id,
+            call_id=call_id,
+        )
+
+        if not call:
+            logging.warning(
+                "Rejected call_accept: no matching active call"
+            )
+            return
+
+        call_id = str(call["call_id"])
+
+        with self.call_lock:
+            if call["status"] not in ("calling", "ringing"):
+                logging.warning(
+                    "Rejected call_accept for call in state %s",
+                    call["status"],
+                )
+                return
+
+            call["status"] = "accepted"
+            call["answered"] = True
+
+            timer = self.call_timers.pop(call_id, None)
+            if timer:
+                timer.cancel()
+
+        try:
+            session = self._get_call_session(call_id)
+
+            if not session:
+                logging.error(
+                    "CallSession missing during acceptance: %s",
+                    call_id,
+                )
+                return
+
+            if session.status not in ("calling", "ringing"):
+                return
+
+            session.status = "accepted"
+            session.accepted_at = datetime.utcnow()
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+            logging.exception("Failed to persist call acceptance")
+            return
+
+        self.notify_call_user(
+            caller_id,
+            self.EVENT_CALL_ACCEPT,
+            call_id=call_id,
+            caller_id=caller_id,
+            receiver_id=receiver_id,
+        )
+
+        logging.info("Call accepted: %s", call_id)
+    def handle_call_connected(self, topic, payload):
+        """
+        Record the time WebRTC actually establishes a connection.
+
+        Android must send this event when its PeerConnection reaches
+        the CONNECTED state.
+        """
+
+        try:
+            parts = topic.split("/")
+
+            if (
+                len(parts) != 3
+                or parts[:2] != ["nonimas", "in"]
+                or not parts[2].isdigit()
             ):
                 return
 
             sender_id = int(parts[2])
-            caller_id = int(payload.get("caller_id"))
+            receiver_id = int(payload.get("receiver_id"))
+            call_id = str(payload.get("call_id", "")).strip()
 
         except (TypeError, ValueError):
+            logging.warning("Invalid call_connected payload")
             return
 
-        if sender_id == caller_id:
+        if sender_id == receiver_id or not call_id:
+            logging.warning("Rejected call_connected: invalid participants")
             return
 
-        caller = User.query.get(caller_id)
-        receiver = User.query.get(sender_id)
- 
-        if not caller or not receiver:
-            return
-
-        self.publish(
-            self.user_topic(caller_id),
-            {
-                "type": "call_accept",
-                "receiver_id": sender_id
-            }
-        )
-        
-    # =========================================================
-    # CALL REJECT
-    # =========================================================
-
-    def handle_call_reject(
-        self,
-        topic,
-        payload
-    ):
-
-        caller_id = payload.get("caller_id")
-        receiver_id = payload.get("receiver_id")
-
-        if not caller_id or not receiver_id:
-            return
-
-        self.publish(
-            self.user_topic(caller_id),
-            {
-                "type": "call_reject",
-                "receiver_id": receiver_id
-            }
+        call = self._get_active_call(
+            sender_id,
+            receiver_id,
+            call_id=call_id,
         )
 
-    # =========================================================
-    # CALL END
-    # =========================================================
-
-    def handle_call_end(
-        self,
-        topic,
-        payload
-    ):
-
-        user_id = payload.get("user_id")
-        other_user_id = payload.get(
-            "other_user_id"
-        )
-
-        if not user_id or not other_user_id:
+        if not call:
+            logging.warning(
+                "Rejected call_connected: no matching active call"
+            )
             return
 
-        self.publish(
-            self.user_topic(other_user_id),
-            {
-                "type": "call_end",
-                "user_id": user_id
-            }
-        ) 
+        with self.call_lock:
+            if call["status"] not in ("accepted", "connected"):
+                logging.warning(
+                    "Rejected call_connected in state %s",
+                    call["status"],
+                )
+                return
+
+            if call["status"] == "connected":
+                # Duplicate WebRTC callbacks must not reset duration.
+                return
+
+            call["status"] = "connected"
+            call["connected_at"] = datetime.utcnow()
+
+        try:
+            session = self._get_call_session(call_id)
+
+            if not session:
+                return
+
+            if session.status != "accepted":
+                return
+
+            session.status = "connected"
+            session.connected_at = call["connected_at"]
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+            logging.exception("Failed to persist connected state")
+            return
+
+        # Inform both participants of the authoritative connection state.
+        for user_id in (sender_id, receiver_id):
+            self.notify_call_user(
+                user_id,
+                self.EVENT_CALL_CONNECTED,
+                call_id=call_id,
+                caller_id=int(call["caller_id"]),
+                receiver_id=int(call["receiver_id"]),
+                connected_at=call["connected_at"].isoformat(),
+            )
+
+        logging.info("Call connected: %s", call_id)
+    def handle_call_reject(self, topic, payload):
+        """Handle an explicit rejection from the receiver."""
+
+        try:
+            parts = topic.split("/")
+
+            if (
+                len(parts) != 3
+                or parts[:2] != ["nonimas", "in"]
+                or not parts[2].isdigit()
+            ):
+                return
+
+            receiver_id = int(parts[2])
+            caller_id = int(payload.get("caller_id"))
+            payload_receiver_id = payload.get("receiver_id")
+            call_id = payload.get("call_id")
+
+            if (
+                payload_receiver_id is not None
+                and int(payload_receiver_id) != receiver_id
+            ):
+                return
+
+        except (TypeError, ValueError):
+            logging.warning("Invalid call_reject payload")
+            return
+
+        if receiver_id == caller_id:
+            return
+
+        call = self._get_active_call(
+            caller_id,
+            receiver_id,
+            call_id=call_id,
+        )
+
+        if not call:
+            logging.warning(
+                "Rejected call_reject: no matching active call"
+            )
+            return
+
+        call_id = str(call["call_id"])
+
+        if call["status"] not in ("calling", "ringing"):
+            logging.warning(
+                "Rejected call_reject in state %s",
+                call["status"],
+            )
+            return
+
+        finalized = self._finalize_call(
+            call_id,
+            outcome="declined",
+            end_reason="declined",
+        )
+
+        if not finalized:
+            return
+
+        self.notify_call_user(
+            caller_id,
+            self.EVENT_CALL_REJECT,
+            call_id=call_id,
+            caller_id=caller_id,
+            receiver_id=receiver_id,
+        )
+
+        logging.info("Call rejected: %s", call_id)
+    def handle_call_end(self, topic, payload):
+        """End a call and create the correct history outcome."""
+
+        try:
+            parts = topic.split("/")
+
+            if (
+                len(parts) != 3
+                or parts[:2] != ["nonimas", "in"]
+                or not parts[2].isdigit()
+            ):
+                return
+
+            sender_id = int(parts[2])
+            user_id = int(payload.get("user_id", sender_id))
+            other_user_id = int(payload.get("other_user_id"))
+            call_id = payload.get("call_id")
+
+        except (TypeError, ValueError):
+            logging.warning("Invalid call_end payload")
+            return
+
+        # Do not allow one user to end another user's call by
+        # supplying a different user_id in the payload.
+        if sender_id != user_id or sender_id == other_user_id:
+            logging.warning("Rejected call_end: participant mismatch")
+            return
+
+        call = self._get_active_call(
+            sender_id,
+            other_user_id,
+            call_id=call_id,
+        )
+
+        if not call:
+            logging.warning(
+                "Rejected call_end: no matching active call"
+            )
+            return
+
+        call_id = str(call["call_id"])
+        caller_id = int(call["caller_id"])
+        receiver_id = int(call["receiver_id"])
+
+        if call["status"] in self.TERMINAL_CALL_STATUSES:
+            return
+
+        if call["status"] == "connected":
+            outcome = "ended"
+            end_reason = "completed"
+
+        elif call["status"] in ("calling", "ringing"):
+            # The call ended before the receiver accepted.
+            outcome = "missed"
+            end_reason = "no_answer"
+
+        else:
+            # Accepted but never reached WebRTC CONNECTED.
+            outcome = "cancelled"
+            end_reason = "connection_failed"
+
+        finalized = self._finalize_call(
+            call_id,
+            outcome=outcome,
+            end_reason=end_reason,
+        )
+
+        if not finalized:
+            return
+
+        self.notify_call_user(
+            other_user_id,
+            self.EVENT_CALL_END,
+            call_id=call_id,
+            user_id=sender_id,
+            other_user_id=other_user_id,
+        )
+
+        logging.info(
+            "Call ended: %s outcome=%s",
+            call_id,
+            outcome,
+        )
+    def handle_call_missed(self, topic, payload):
+        """
+        Handle a receiver-side missed-call event.
+
+        This is for an incoming call that timed out without acceptance,
+        not an explicit rejection.
+        """
+
+        try:
+            parts = topic.split("/")
+
+            if (
+                len(parts) != 3
+                or parts[:2] != ["nonimas", "in"]
+                or not parts[2].isdigit()
+            ):
+                return
+
+            receiver_id = int(parts[2])
+            caller_id = int(payload.get("caller_id"))
+            call_id = payload.get("call_id")
+
+        except (TypeError, ValueError):
+            logging.warning("Invalid call_missed payload")
+            return
+
+        if caller_id == receiver_id:
+            return
+
+        call = self._get_active_call(
+            caller_id,
+            receiver_id,
+            call_id=call_id,
+        )
+
+        if not call:
+            logging.warning(
+                "Ignored call_missed: no matching active call"
+            )
+            return
+
+        call_id = str(call["call_id"])
+
+        if call["status"] not in ("calling", "ringing"):
+            return
+
+        finalized = self._finalize_call(
+            call_id,
+            outcome="missed",
+            end_reason="no_answer",
+        )
+
+        if not finalized:
+            return
+
+        self.notify_call_user(
+            caller_id,
+            self.EVENT_CALL_MISSED,
+            call_id=call_id,
+            caller_id=caller_id,
+            receiver_id=receiver_id,
+        )
+
+        logging.info("Missed call recorded: %s", call_id)
     def notify_call_user(self, user_id, event_type, **data):
         payload = {
             "type": event_type,
@@ -771,4 +1359,149 @@ class MQTTService:
             payload,
             qos=1,
         )
+    def _schedule_call_timeout(self, call_id, timeout_seconds=45):
+        """Automatically finalize a call that was never answered."""
+
+        call_id = str(call_id)
+
+        timer = threading.Timer(
+            timeout_seconds,
+            self._call_timeout_fired,
+            args=(call_id,),
+        )
+
+        timer.daemon = True
+
+        with self.call_lock:
+            old_timer = self.call_timers.pop(call_id, None)
+
+            if old_timer:
+                old_timer.cancel()
+
+            self.call_timers[call_id] = timer
+
+        timer.start()
+
+    def _call_timeout_fired(self, call_id):
+        """Timeout callback; enter Flask context before using SQLAlchemy."""
+
+        if not self.flask_app:
+            return
+
+        with self.flask_app.app_context():
+            try:
+                session = self._get_call_session(call_id)
+
+                if not session:
+                    return
+
+                # A call that was accepted or connected must not be
+                # treated as an unanswered call.
+                if session.status not in ("calling", "ringing"):
+                    return
+
+                self._finalize_call(
+                    call_id,
+                    outcome="missed",
+                    end_reason="no_answer",
+                )
+
+            except Exception:
+                db.session.rollback()
+                logging.exception("Call timeout processing failed")
+
+    def _finalize_call(
+        self,
+        call_id,
+        outcome,
+        end_reason,
+        ended_at=None,
+    ):
+        """
+        Finalize a call once, persist its outcome and duration,
+        create call history, and release participants.
+        """
+
+        call_id = str(call_id)
+        ended_at = ended_at or datetime.utcnow()
+
+        if not self.flask_app:
+            logging.error("Cannot finalize call without Flask app")
+            return False
+
+        with self.flask_app.app_context():
+            try:
+                session = (
+                    CallSession.query
+                    .filter_by(call_id=call_id)
+                    .with_for_update()
+                    .first()
+                )
+
+                if not session:
+                    logging.warning(
+                        "Cannot finalize missing session %s",
+                        call_id,
+                    )
+                    self._finish_call(call_id)
+                    return False
+
+                if session.status in self.TERMINAL_CALL_STATUSES:
+                    self._finish_call(call_id)
+                    return False
+
+                connected_at = session.connected_at
+
+                if connected_at:
+                    duration = max(
+                        0,
+                        int((ended_at - connected_at).total_seconds()),
+                    )
+                else:
+                    duration = 0
+
+                session.status = outcome
+                session.end_reason = end_reason
+                session.ended_at = ended_at
+                session.duration_seconds = duration
+
+                create_history = not session.history_created
+
+                if create_history:
+                    session.history_created = True
+
+                call = {
+                    "call_id": session.call_id,
+                    "caller_id": session.caller_id,
+                    "receiver_id": session.receiver_id,
+                    "call_type": session.call_type,
+                }
+
+                db.session.commit()
+
+            except Exception:
+                db.session.rollback()
+                logging.exception(
+                    "Failed to finalize call %s",
+                    call_id,
+                )
+                return False
+
+            if create_history:
+                self._create_call_history(
+                    call,
+                    outcome=outcome,
+                    duration_seconds=duration,
+                )
+
+            self._finish_call(call_id)
+
+            logging.info(
+                "Call finalized: id=%s outcome=%s duration=%s",
+                call_id,
+                outcome,
+                duration,
+            )
+
+            return True
 mqtt_service = MQTTService()

@@ -35,23 +35,42 @@ app.config.from_object(config["production"])
 # FIREBASE ADMIN
 # ==========================================================
 
-firebase_json = os.environ.get(
-    "FIREBASE_SERVICE_ACCOUNT_JSON"
-)
+firebase_config_value = os.environ.get(
+    "FIREBASE_SERVICE_ACCOUNT_JSON", ""
+).strip()
 
-if not firebase_json:
+if not firebase_config_value:
     raise RuntimeError(
-        "FIREBASE_SERVICE_ACCOUNT_JSON is not configured"
+        "FIREBASE_SERVICE_ACCOUNT_JSON is missing or empty. "
+        "Set it to valid Firebase service-account JSON "
+        "or a path to a service-account JSON file."
     )
 
 if not firebase_admin._apps:
+    try:
+        # Option 1: The environment variable contains a file path.
+        if os.path.isfile(firebase_config_value):
+            cred = credentials.Certificate(firebase_config_value)
 
-    cred = credentials.Certificate(
-        json.loads(firebase_json)
-    )
+        # Option 2: The environment variable contains JSON text.
+        else:
+            firebase_config = json.loads(firebase_config_value)
+            cred = credentials.Certificate(firebase_config)
 
-    firebase_admin.initialize_app(cred)
+        firebase_admin.initialize_app(cred)
 
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON "
+            "and does not point to an existing credentials file. "
+            "Check the environment variable configuration."
+        ) from exc
+
+    except (ValueError, OSError) as exc:
+        raise RuntimeError(
+            "Firebase service-account credentials could not "
+            "be loaded. Check the credentials and file path."
+        ) from exc
 
 # ==========================================================
 # INITIALIZE EXTENSIONS
