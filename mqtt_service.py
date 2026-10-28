@@ -1340,6 +1340,16 @@ class MQTTService:
             return
 
         call_id = str(call["call_id"])
+        session = self._get_call_session(call_id)
+        if not session:
+            return
+        if session.status not in ("calling", "ringing"):
+            logging.info(
+                "Ignoring missed event for call %s in database state %s",
+                call_id,
+                session.status,
+            )
+            return
 
         if call["status"] not in ("calling", "ringing"):
             return
