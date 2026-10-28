@@ -531,48 +531,6 @@ class MQTTService:
 
         db.session.commit()
         return session
-
-    def _publish_call_history(self, message):
-        """Publish a persisted call-history message to both chat clients."""
-
-        payload = {
-            "type": "new_message",
-            "message_id": message.id,
-            "sender_id": message.sender_id,
-            "receiver_id": message.receiver_id,
-            "message": message.message,
-            "media_url": message.media_url,
-            "media_type": message.media_type,
-            "message_type": message.message_type,
-            "call_id": message.call_id,
-            "call_duration": message.call_duration,
-            "created_at": (
-                message.created_at.isoformat()
-                if message.created_at
-                else datetime.utcnow().isoformat()
-            ),
-            "is_read": message.is_read,
-        }
-
-        self.notify_call_user(
-            message.sender_id,
-            "new_message",
-            **{
-                key: value
-                for key, value in payload.items()
-                if key != "type"
-            },
-        )
-
-        self.notify_call_user(
-            message.receiver_id,
-            "new_message",
-            **{
-                key: value
-                for key, value in payload.items()
-                if key != "type"
-            },
-        )
     def handle_call_invite(self, topic, payload):
         """Create and route a persisted outgoing call session."""
 
@@ -625,14 +583,34 @@ class MQTTService:
                 return
 
             if receiver_id in self.active_calls:
+                busy_call_id = str(uuid.uuid4())
+                self._create_call_history(
+                    {
+                        "call_id": busy_call_id,
+                        "caller_id": caller_id,
+                        "receiver_id": receiver_id,
+                    },
+                    outcome="busy",
+                    duration_seconds=0,
+                )
                 self.notify_call_user(
                     caller_id,
-                    self.EVENT_CALL_BUSY,
+                    self.EVENT_CALL_RINGING,
+                    call_id=busy_call_id,
                     receiver_id=receiver_id,
-                    reason="receiver_busy",
                 )
-                return
-
+                busy_timer = threading.Timer(
+                    1,
+                    self.notify_call_user,
+                    args=(caller_id, self.EVENT_CALL_BUSY), 
+                    kwargs={
+                        "call_id": call_id,
+                        "receiver_id": receiver_id,
+                        "reason": "receiver_busy",
+                    },
+                )
+                busy_timer.daemon = True
+                busy_timer.start()
             call = {
                 "call_id": call_id,
                 "caller_id": caller_id,
@@ -720,104 +698,6 @@ class MQTTService:
             caller_id,
             receiver_id,
         )
-
-    def _create_call_history(self, call, outcome, duration_seconds=0):
-        """
-        Create a history row for each participant.
-
-        UniqueConstraint(call_id, sender_id) protects against duplicates.
-        Call this only after the session has been finalized.
-        """
-
-        call_id = str(call["call_id"])
-        caller_id = int(call["caller_id"])
-        receiver_id = int(call["receiver_id"])
-
-        duration_seconds = max(0, int(duration_seconds or 0))
-
-        if outcome == "declined":
-            caller_text = "📞 Call declined"
-            receiver_text = "📞 You declined the call"
-
-        elif outcome == "missed":
-            caller_text = "📞 No answer"
-            receiver_text = "📞 You missed a call"
-
-        elif outcome == "ended":
-            caller_text = "📞 Call ended"
-            receiver_text = "📞 Call ended"
-
-        elif outcome == "cancelled":
-            caller_text = "📞 Call cancelled"
-            receiver_text = "📞 Missed call"
-
-        elif outcome == "offline":
-            caller_text = "📞 No answer"
-            receiver_text = "📞 You missed a call"
-
-        elif outcome == "busy":
-            caller_text = "📞 User is busy"
-            receiver_text = "📞 Missed call"
-
-        else:
-            caller_text = "📞 Call ended"
-            receiver_text = "📞 Call ended"
-
-        messages_to_publish = []
-
-        try:
-            entries = [
-                (caller_id, receiver_id, caller_text),
-                (receiver_id, caller_id, receiver_text),
-            ]
-
-            for sender_id, recipient_id, text in entries:
-                existing = ChatMessage.query.filter_by(
-                    call_id=call_id,
-                    sender_id=sender_id,
-                ).first()
-
-                if existing:
-                    continue
-
-                message = ChatMessage(
-                    sender_id=sender_id,
-                    receiver_id=recipient_id,
-                    message=text,
-                    media_url=None,
-                    media_type=None,
-                    message_type="call",
-                    call_id=call_id,
-                    call_duration=duration_seconds,
-                    is_read=False,
-                    created_at=datetime.utcnow(),
-                )
-
-                db.session.add(message)
-                db.session.flush()
-
-                messages_to_publish.append(message)
-
-            db.session.commit()
-
-        except Exception:
-            db.session.rollback()
-            logging.exception(
-                "Failed to create call history for %s",
-                call_id,
-            )
-            return False
-
-        for message in messages_to_publish:
-            try:
-                self._publish_call_history(message)
-            except Exception:
-                logging.exception(
-                    "Failed to publish call history message %s",
-                    message.id,
-                )
-
-        return True
     def _create_call_history(self, call, outcome, duration_seconds=0):
    
         call_id = str(call["call_id"])
@@ -829,39 +709,35 @@ class MQTTService:
         # Define which records each participant should receive.
         if outcome == "declined":
             entries = [
-                (caller_id, receiver_id, "📞 Call declined"),
-                (receiver_id, caller_id, "📞 You declined the call"),
+                (caller_id, receiver_id, "📞 CALL DECLINED"),
+                (receiver_id, caller_id, "📞 YOU DECLINED THE CALL"),
             ]
 
-        elif outcome == "missed":
+        elif outcome in ("missed", "offline", "cancelled"):
             entries = [
-                (caller_id, receiver_id, "📞 No answer"),
-                (receiver_id, caller_id, "📞 You missed a call"),
-            ]
-
-        elif outcome == "cancelled":
-            # Caller cancelled before the receiver answered.
-            # Do not create a "Call cancelled" message for the caller.
-            entries = [
-                (receiver_id, caller_id, "📞 Missed call"),
-            ]
-
-        elif outcome == "offline":
-            entries = [
-                (caller_id, receiver_id, "📞 No answer"),
-                (receiver_id, caller_id, "📞 You missed a call"),
+                (caller_id, receiver_id, "📞 NO ANSWER"),
+                (receiver_id, caller_id, "📞 MISSED CALL"),
             ]
 
         elif outcome == "busy":
             entries = [
-                (caller_id, receiver_id, "📞 User is busy"),
-                (receiver_id, caller_id, "📞 Missed call"),
+                (caller_id, receiver_id, "📞 ENDED, BUSY"),
+                (receiver_id, caller_id, "📞 CALL BUSY"),
             ]
 
         elif outcome == "ended":
+            duration_text = f"{duration_seconds // 60:02d}:{duration_seconds % 60:02d}"
             entries = [
-                (caller_id, receiver_id, "📞 Call ended"),
-                (receiver_id, caller_id, "📞 Call ended"),
+                (
+                    caller_id,
+                    receiver_id,
+                    f"📞 CALL LASTED {duration_text}",
+                ),
+                (
+                    receiver_id,
+                    caller_id,
+                    f"📞 CALL LASTED {duration_text}",
+                ),
             ]
 
         else:
@@ -924,6 +800,40 @@ class MQTTService:
                 )
 
         return True
+        
+    def _publish_call_history(self, message):
+        """Send each call-history entry only to the user it describes."""
+
+        payload = {
+            "type": "new_message",
+            "message_id": message.id,
+            "sender_id": message.sender_id,
+            "receiver_id": message.receiver_id,
+            "message": message.message,
+           "media_url": message.media_url,
+            "media_type": message.media_type,
+            "message_type": message.message_type,
+            "call_id": message.call_id,
+            "call_duration": message.call_duration,
+            "created_at": (
+                message.created_at.isoformat()
+                if message.created_at
+                else datetime.utcnow().isoformat()
+            ),
+            "is_read": message.is_read,
+        }
+
+        self.notify_call_user(
+            message.sender_id,
+            "new_message",
+            **{
+                key: value
+                for key, value in payload.items()
+                if key != "type"
+            },
+        )
+
+
     def _finish_call(self, call_id):
         """Release participants and cancel a call's timeout timer."""
 
@@ -1503,12 +1413,19 @@ class MQTTService:
                 # treated as an unanswered call.
                 if session.status not in ("calling", "ringing"):
                     return
-
-                self._finalize_call(
+                finalized = self._finalize_call(
                     call_id,
                     outcome="missed",
                     end_reason="no_answer",
                 )
+                if finalized:
+                    self.notify_call_user(
+                        session.caller_id,
+                        self.EVENT_CALL_MISSED,
+                        call_id=call_id,
+                        caller_id=session.caller_id,
+                        receiver_id=session.receiver_id,
+                    )
 
             except Exception:
                 db.session.rollback()

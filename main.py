@@ -3148,7 +3148,8 @@ def get_messages(other_user):
         (
             (ChatMessage.sender_id == other_user) &
             (ChatMessage.receiver_id == user_id) &
-            (ChatMessage.deleted_for_receiver == False)
+            (ChatMessage.deleted_for_receiver == False) &
+            (ChatMessage.message_type != "call")
         )
     ).order_by(
         ChatMessage.created_at.asc()
