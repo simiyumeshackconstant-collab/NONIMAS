@@ -1263,7 +1263,7 @@ class MQTTService:
         if call["status"] in self.TERMINAL_CALL_STATUSES:
             return
 
-        if call["status"] == "connected":
+        if call["status"] in ("accepted", "connected"):
             outcome = "ended"
             end_reason = "completed"
 
